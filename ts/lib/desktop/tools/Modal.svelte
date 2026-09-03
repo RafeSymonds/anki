@@ -56,7 +56,8 @@ Qt app. Escape closes it; the footer slot holds the buttons.
     .backdrop {
         position: fixed;
         inset: 0;
-        background: rgba(0, 0, 0, 0.35);
+        background: rgba(12, 15, 22, 0.32);
+        backdrop-filter: blur(3px);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -67,26 +68,25 @@ Qt app. Escape closes it; the footer slot holds the buttons.
         max-height: calc(100vh - 32px);
         display: flex;
         flex-direction: column;
-        background: var(--canvas-elevated);
+        background: var(--app-surface);
         color: var(--fg);
-        border: 1px solid var(--border);
-        border-radius: var(--border-radius-large, 10px);
-        box-shadow: var(--shadow);
+        border-radius: var(--app-radius-large);
+        box-shadow: var(--app-shadow-pop);
         outline: none;
     }
     .head {
-        padding: 12px 16px;
+        padding: 16px 20px 12px;
+        font-family: var(--app-font-display);
+        font-size: 15px;
         font-weight: 600;
-        border-bottom: 1px solid var(--border);
     }
     .body {
-        padding: 16px;
+        padding: 0 20px 4px;
         overflow: auto;
         min-height: 0;
     }
     .foot {
-        padding: 10px 16px;
-        border-top: 1px solid var(--border);
+        padding: 16px 20px;
         display: flex;
         justify-content: flex-end;
         gap: 8px;
@@ -98,19 +98,23 @@ Qt app. Escape closes it; the footer slot holds the buttons.
     .box :global(button) {
         font: inherit;
         color: var(--fg);
-        background: var(--button-bg);
-        border: 1px solid var(--border);
-        border-radius: var(--border-radius);
-        padding: 5px 12px;
+        background: var(--app-surface-sunken);
+        border: 1px solid var(--app-line);
+        border-radius: var(--app-radius);
+        padding: 7px 14px;
         cursor: pointer;
     }
     .box :global(button:hover) {
         border-color: var(--button-hover-border);
     }
     .box :global(button.primary) {
-        background: var(--button-primary-bg);
-        color: white;
+        background: var(--app-accent);
+        color: var(--app-accent-fg);
         border-color: transparent;
+        font-weight: 600;
+    }
+    .box :global(button.primary:hover) {
+        background: var(--app-accent-hover);
     }
     .box :global(button:disabled) {
         opacity: 0.5;
@@ -121,10 +125,16 @@ Qt app. Escape closes it; the footer slot holds the buttons.
     .box :global(select) {
         font: inherit;
         color: var(--fg);
-        background: var(--canvas);
-        border: 1px solid var(--border);
-        border-radius: var(--border-radius);
-        padding: 4px 6px;
+        background: var(--app-surface-sunken);
+        border: 1px solid var(--app-line);
+        border-radius: var(--app-radius-small);
+        padding: 6px 8px;
+    }
+    .box :global(input:focus-visible),
+    .box :global(select:focus-visible),
+    .box :global(button:focus-visible) {
+        outline: 2px solid var(--app-accent);
+        outline-offset: 1px;
     }
     .box :global(label) {
         display: flex;

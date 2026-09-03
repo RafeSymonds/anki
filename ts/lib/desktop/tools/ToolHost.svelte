@@ -41,6 +41,8 @@ and report through a notice.
 
     const dispatch = createEventDispatcher<{
         noteTypes: void;
+        /** Show the Get Shared Decks screen. */
+        shared: void;
         /** Embed a SvelteKit route. */
         page: PageRequest;
         /** The collection changed; the current deck may have too. */
@@ -85,6 +87,12 @@ and report through a notice.
         if (!path) {
             return;
         }
+        await importPath(path);
+    }
+
+    /** Import a file the user did not have to find: a shared deck already
+     * downloaded, or one dropped on the window. */
+    export async function importPath(path: string): Promise<void> {
         const target = importTargetFor(path);
         if (target.kind === "page") {
             dispatch("page", {
@@ -180,6 +188,9 @@ and report through a notice.
                 break;
             case "noteTypes":
                 dispatch("noteTypes");
+                break;
+            case "sharedDecks":
+                dispatch("shared");
                 break;
         }
     }

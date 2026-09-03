@@ -43,6 +43,8 @@ Edit, Undo and the card actions menu.
 
     let frame: CardFrame;
     let editor: EditorPanel | undefined;
+    /** Cards waiting when this sitting started, for the progress bar. */
+    let sessionTotal = 0;
     let editing = false;
     let menuOpen = false;
     let elapsed = 0;
@@ -51,22 +53,48 @@ Edit, Undo and the card actions menu.
 
     const easeKeys: Record<Ease, string> = { 1: "1", 2: "2", 3: "3", 4: "4" };
 
+    // The bar across the top: how much of what was waiting is done. Cards
+    // rated Again come back, so the total can grow; keep the high-water mark
+    // rather than letting the bar jump backwards.
+    $: remainingCards = $counts
+        ? $counts.counts[0] + $counts.counts[1] + $counts.counts[2]
+        : 0;
+    $: rememberHighWater(remainingCards);
+    $: donePercent = sessionTotal
+        ? Math.round(((sessionTotal - remainingCards) / sessionTotal) * 100)
+        : 0;
+
+    function rememberHighWater(remaining: number): void {
+        if (remaining > sessionTotal) {
+            sessionTotal = remaining;
+        }
+    }
+
     // One-time guide over the answer buttons (per profile). It goes away
     // with "Got it" or with the first answer, and is not shown again.
     let showGuide = false;
     void settingsGet("profile", FIRST_CARD_GUIDE_KEY)
         .then((stored) => (showGuide = guideNeeded(stored)))
         .catch(() => (showGuide = false));
-    $: guideVisible = showGuide && $state === "answer" && $buttons.length > 0;
+    let guideRequested = false;
+    $: guideVisible =
+        (showGuide || guideRequested) && $state === "answer" && $buttons.length > 0;
     $: if (showGuide && $state === "transition") {
         dismissGuide();
     }
     function dismissGuide(): void {
+        guideRequested = false;
         if (!showGuide) {
             return;
         }
         showGuide = false;
         void settingsSet("profile", FIRST_CARD_GUIDE_KEY, true);
+    }
+
+    /** The "?" next to the answer buttons brings the guide back. */
+    function toggleGuide(): void {
+        guideRequested = !guideVisible;
+        showGuide = false;
     }
 
     const shortcuts = new ShortcutMap().addAll([
@@ -228,6 +256,16 @@ Edit, Undo and the card actions menu.
 </script>
 
 <div class="reviewer">
+    <div
+        class="progress"
+        role="progressbar"
+        aria-label="Cards done in this session"
+        aria-valuenow={donePercent}
+        aria-valuemin="0"
+        aria-valuemax="100"
+    >
+        <span class="progress-fill" style="width: {donePercent}%"></span>
+    </div>
     <div class="card-area" class:split={editing}>
         <div class="card-pane">
             <CardFrame
@@ -315,6 +353,15 @@ Edit, Undo and the card actions menu.
                         <span class="label">{button.label}</span>
                     </button>
                 {/each}
+                <button
+                    class="explain"
+                    aria-label="What do these buttons mean?"
+                    title="What do these buttons mean?"
+                    aria-expanded={guideVisible}
+                    on:click={toggleGuide}
+                >
+                    ?
+                </button>
             {:else if $state === "transition"}
                 <span class="fg-subtle">…</span>
             {/if}
@@ -457,59 +504,85 @@ Edit, Undo and the card actions menu.
         height: 100%;
         min-height: 0;
     }
+    .progress {
+        flex: none;
+        height: 4px;
+        margin: 0 24px 12px;
+        border-radius: 999px;
+        background: var(--app-surface-sunken);
+        overflow: hidden;
+    }
+    .progress-fill {
+        display: block;
+        height: 100%;
+        border-radius: 999px;
+        background: var(--app-accent);
+        transition: width var(--transition) ease-out;
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .progress-fill {
+            transition: none;
+        }
+    }
     .card-area {
         flex: 1;
         min-height: 0;
         display: grid;
         grid-template-columns: minmax(0, 1fr);
+        gap: 16px;
+        padding: 0 24px;
     }
     .card-area.split {
         grid-template-columns: minmax(0, 1fr) minmax(320px, 45%);
     }
+    /* The card sits on its own sheet, the way a physical card would. */
     .card-pane {
         position: relative;
         min-height: 0;
+        background: var(--app-surface);
+        border-radius: var(--app-radius-large);
+        box-shadow: var(--app-shadow-card);
+        overflow: hidden;
     }
     .editor-pane {
         display: flex;
         flex-direction: column;
         min-height: 0;
-        border-inline-start: 1px solid var(--border);
-        background: var(--canvas);
+        background: var(--app-surface);
+        border-radius: var(--app-radius-large);
+        box-shadow: var(--app-shadow-card);
+        overflow: hidden;
     }
     .editor-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 6px 10px;
-        border-bottom: 1px solid var(--border);
-        background: var(--canvas-elevated);
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--app-line);
+        font-family: var(--app-font-display);
         font-weight: 600;
     }
     button.active {
-        background: var(--highlight-bg);
-        color: var(--highlight-fg);
+        background: var(--app-accent-soft);
+        color: var(--app-accent);
     }
     .notice {
         position: absolute;
         bottom: 12px;
         left: 50%;
         transform: translateX(-50%);
-        background: var(--canvas-overlay);
+        background: var(--app-surface);
         color: var(--fg);
-        border: 1px solid var(--border);
-        border-radius: var(--border-radius);
-        padding: 6px 12px;
-        box-shadow: var(--shadow);
+        border-radius: var(--app-radius);
+        padding: 8px 14px;
+        box-shadow: var(--app-shadow-pop);
     }
     .bottom {
         display: grid;
         grid-template-columns: 1fr auto 1fr;
         align-items: center;
         gap: 8px;
-        padding: 8px 12px;
-        border-top: 1px solid var(--border);
-        background: var(--canvas-elevated);
+        padding: 14px 24px 18px;
     }
     .left {
         display: flex;
@@ -529,43 +602,70 @@ Edit, Undo and the card actions menu.
     }
     button {
         font: inherit;
-        color: var(--fg);
-        background: var(--button-bg);
-        border: 1px solid var(--border);
-        border-radius: var(--border-radius);
-        padding: 5px 12px;
+        color: var(--fg-subtle);
+        background: transparent;
+        border: 0;
+        border-radius: var(--app-radius);
+        padding: 7px 12px;
         cursor: pointer;
+        transition:
+            background var(--transition),
+            color var(--transition);
     }
     button:hover {
-        border-color: var(--button-hover-border);
+        background: var(--app-surface);
+        color: var(--fg);
     }
     .show-answer {
-        min-width: 220px;
-        padding: 8px 20px;
+        min-width: 260px;
+        padding: 12px 24px;
         display: flex;
         flex-direction: column;
         align-items: center;
         gap: 2px;
+        background: var(--app-accent);
+        color: var(--app-accent-fg);
+        font-family: var(--app-font-display);
+        font-size: 15px;
+        font-weight: 600;
+        box-shadow: var(--app-shadow-card);
+    }
+    .show-answer:hover {
+        background: var(--app-accent-hover);
+        color: var(--app-accent-fg);
     }
     .counts {
         font-size: 12px;
-        color: var(--fg-subtle);
+        font-weight: 400;
+        opacity: 0.8;
     }
     .counts .current {
         text-decoration: underline;
     }
+    /* One pill per rating, coloured by what it means, interval on top. */
     .ease {
-        min-width: 96px;
+        min-width: 104px;
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 2px;
-        padding: 6px 14px;
+        gap: 1px;
+        padding: 9px 16px;
+        background: var(--app-surface);
+        box-shadow: var(--app-shadow-card);
+        color: var(--fg);
+    }
+    .ease:hover {
+        transform: translateY(-1px);
     }
     .ease .interval {
-        font-size: 12px;
+        font-size: 11px;
         color: var(--fg-subtle);
         min-height: 1.2em;
+        font-variant-numeric: tabular-nums;
+    }
+    .ease .label {
+        font-family: var(--app-font-display);
+        font-weight: 600;
     }
     .ease1 .label {
         color: var(--accent-danger);
@@ -580,16 +680,32 @@ Edit, Undo and the card actions menu.
         color: var(--state-new);
     }
     .ease.default {
-        border-color: var(--border-strong);
+        outline: 2px solid var(--app-accent-soft);
+    }
+    .explain {
+        width: 30px;
+        padding: 0;
+        align-self: center;
+        border-radius: 50%;
+        aspect-ratio: 1;
+        color: var(--fg-faint);
+        font-size: 13px;
+    }
+    .explain:hover,
+    .explain[aria-expanded="true"] {
+        background: var(--app-accent-soft);
+        color: var(--app-accent);
     }
     .remaining {
         color: var(--fg-subtle);
         font-variant-numeric: tabular-nums;
         white-space: nowrap;
+        font-size: 13px;
     }
     .timer {
         font-variant-numeric: tabular-nums;
         color: var(--fg-subtle);
+        font-size: 13px;
     }
     .timer.over {
         color: var(--accent-danger);
@@ -600,13 +716,13 @@ Edit, Undo and the card actions menu.
     .menu {
         position: absolute;
         right: 0;
-        bottom: calc(100% + 4px);
-        min-width: 240px;
-        background: var(--canvas-elevated);
-        border: 1px solid var(--border);
-        border-radius: var(--border-radius);
-        box-shadow: var(--shadow);
-        padding: 4px;
+        bottom: calc(100% + 6px);
+        min-width: 250px;
+        background: var(--app-surface);
+        border: 1px solid var(--app-line);
+        border-radius: var(--app-radius);
+        box-shadow: var(--app-shadow-pop);
+        padding: 6px;
         display: flex;
         flex-direction: column;
         z-index: 10;
@@ -617,22 +733,21 @@ Edit, Undo and the card actions menu.
         align-items: center;
         gap: 12px;
         text-align: start;
-        border: 0;
-        background: transparent;
-        padding: 6px 10px;
+        color: var(--fg);
+        padding: 7px 10px;
     }
     .menu button:hover {
-        background: var(--highlight-bg);
-        color: var(--highlight-fg);
+        background: var(--app-accent-soft);
     }
     .menu kbd {
         font-size: 11px;
         color: var(--fg-subtle);
+        font-family: var(--app-font-mono);
     }
     .divider {
         height: 1px;
-        background: var(--border);
-        margin: 4px 0;
+        background: var(--app-line);
+        margin: 5px 0;
     }
     .flag-dot {
         display: inline-block;

@@ -11,6 +11,7 @@ JS, so keeping them in their own document keeps them out of the shell.
     import { installBridgeHandler } from "./bridge";
     import { isInteractiveTarget } from "./click-to-edit";
     import type { CardView } from "./reviewer";
+    import { applyDesktopThemeToFrame } from "./theme";
 
     export let onCommand: (command: string) => void;
     export let onKeydown: (event: KeyboardEvent) => void;
@@ -75,6 +76,7 @@ JS, so keeping them in their own document keeps them out of the shell.
     $: (nightMode, applyTheme());
 
     function onLoad(): void {
+        applyDesktopThemeToFrame(frame);
         const w = win();
         if (!w) {
             return;

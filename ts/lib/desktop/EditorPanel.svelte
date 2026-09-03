@@ -57,6 +57,7 @@ makes through FrontendService.
         notetypeKindOptions,
     } from "./notetype-kinds";
     import { onRpcDone } from "./rpc-events";
+    import { applyDesktopThemeToFrame } from "./theme";
 
     export let mode: "add" | "current" | "browser" = "add";
     export let noteId: bigint | null = null;
@@ -221,6 +222,7 @@ makes through FrontendService.
     }
 
     function onLoad(): void {
+        applyDesktopThemeToFrame(frame);
         const w = win();
         if (w) {
             installBridgeHandler(w, (command) => onBridge(command));

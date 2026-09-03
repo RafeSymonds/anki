@@ -170,6 +170,28 @@ const actions: Action[] = [
             await p.getByRole("button", { name: /Close/ }).first().click({ timeout: 2000 });
         },
     },
+    {
+        name: "shared-decks",
+        run: async (p) => {
+            await p.getByRole("button", { name: "Get shared decks" }).click({ timeout: 2000 });
+            await p.getByRole("heading", { name: "Get shared decks" }).waitFor({ timeout: 8000 });
+            await p.getByRole("button", { name: /Close/ }).first().click({ timeout: 2000 });
+        },
+    },
+    {
+        name: "study-settings",
+        run: async (p) => {
+            await p.getByRole("button", { name: "Adjust studying" }).click({ timeout: 2000 });
+            // Cancel, not Save: the walk must leave the deck's limits alone.
+            const dialog = p.getByRole("dialog");
+            await dialog.getByRole("button", { name: "Cancel" }).waitFor({ timeout: 8000 });
+            await dialog.getByRole("button", { name: "Cancel" }).click({ timeout: 2000 });
+        },
+    },
+    {
+        name: "answer-guide",
+        run: (p) => p.getByRole("button", { name: "What do these buttons mean?" }).click({ timeout: 2000 }),
+    },
     { name: "close", run: (p) => p.getByRole("button", { name: /Close/ }).first().click({ timeout: 2000 }) },
 ];
 

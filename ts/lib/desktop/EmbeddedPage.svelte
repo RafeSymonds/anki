@@ -13,6 +13,7 @@ for as long as the page is mounted.
 
     import { installBridgeHandler } from "./bridge";
     import { registerFrontendHandler, typedHandler } from "./frontend-service";
+    import { applyDesktopThemeToFrame } from "./theme";
 
     export let src: string;
     export let nightMode = false;
@@ -60,6 +61,7 @@ for as long as the page is mounted.
     });
 
     function onLoad(): void {
+        applyDesktopThemeToFrame(frame);
         const win = frame?.contentWindow;
         if (win) {
             installBridgeHandler(win, (command) => {

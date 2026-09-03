@@ -13,6 +13,7 @@
 pub mod backup;
 pub mod demo;
 pub mod desktop_api;
+pub mod downloads;
 pub mod http;
 pub mod menu;
 pub mod profile;

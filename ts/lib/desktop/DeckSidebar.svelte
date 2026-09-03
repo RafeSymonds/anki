@@ -4,7 +4,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 The deck list, always visible on the left. Selecting a deck shows its
 overview; the disclosure triangle collapses subdecks; the gear opens the
-deck's actions.
+deck's actions. The + button at the top is where new cards come from:
+a deck of your own, a deck someone else made, or a file.
 -->
 <script lang="ts">
     import * as tr from "@generated/ftl";
@@ -24,19 +25,60 @@ deck's actions.
         delete: bigint;
         create: void;
         export: bigint;
+        shared: void;
+        import: void;
     }>();
 
     let menuFor: bigint | null = null;
+    let addOpen = false;
+
+    function addAction(action: "create" | "shared" | "import"): void {
+        addOpen = false;
+        dispatch(action);
+    }
+
+    /** Total cards waiting in a row, for the compact chip on collapsed rows. */
+    function due(row: DeckRow): number {
+        return row.newCount + row.learnCount + row.reviewCount;
+    }
 </script>
 
 <nav class="sidebar">
     <div class="drag-strip" data-tauri-drag-region></div>
     <div class="header">
-        <span class="title">{tr.decksDeck()}</span>
-        <span class="col">{tr.actionsNew()}</span>
-        <span class="col">{tr.decksLearnHeader()}</span>
-        <span class="col">{tr.decksReviewHeader()}</span>
-        <span class="gear-col"></span>
+        <span class="title">{tr.actionsDecks()}</span>
+        <div class="add-anchor">
+            <button
+                class="add"
+                aria-haspopup="menu"
+                aria-expanded={addOpen}
+                aria-label="More ways to get decks"
+                title="New deck, shared deck or file"
+                on:click={() => (addOpen = !addOpen)}
+            >
+                +
+            </button>
+            {#if addOpen}
+                <!-- svelte-ignore a11y_click_events_have_key_events -->
+                <div
+                    class="menu"
+                    role="menu"
+                    tabindex="-1"
+                    on:mouseleave={() => (addOpen = false)}
+                    on:click|stopPropagation
+                >
+                    <button role="menuitem" on:click={() => addAction("create")}>
+                        {tr.decksCreateDeck()}
+                    </button>
+                    <button role="menuitem" on:click={() => addAction("shared")}>
+                        Get Shared Decks…
+                    </button>
+                    <button role="menuitem" on:click={() => addAction("import")}>
+                        {tr.decksImportFile()}…
+                    </button>
+                </div>
+            {/if}
+        </div>
     </div>
     <div class="rows">
         {#each rows as row (row.id)}
@@ -44,7 +86,8 @@ deck's actions.
                 class="row"
                 class:current={row.id === currentDeckId}
                 class:filtered={row.filtered}
-                style="padding-inline-start: {8 + (row.level - 1) * 16}px"
+                class:quiet={due(row) === 0}
+                style="padding-inline-start: {10 + (row.level - 1) * 14}px"
                 role="button"
                 tabindex="0"
                 on:click={() => dispatch("select", row.id)}
@@ -68,12 +111,28 @@ deck's actions.
                     <span class="disclosure"></span>
                 {/if}
                 <span class="name" title={row.name}>{row.shortName}</span>
-                <span class="count new" class:zero={!row.newCount}>{row.newCount}</span>
-                <span class="count learn" class:zero={!row.learnCount}>
-                    {row.learnCount}
-                </span>
-                <span class="count review" class:zero={!row.reviewCount}>
-                    {row.reviewCount}
+                <span class="counts">
+                    <span
+                        class="count new"
+                        class:zero={!row.newCount}
+                        title={tr.actionsNew()}
+                    >
+                        {row.newCount}
+                    </span>
+                    <span
+                        class="count learn"
+                        class:zero={!row.learnCount}
+                        title={tr.schedulingLearning()}
+                    >
+                        {row.learnCount}
+                    </span>
+                    <span
+                        class="count review"
+                        class:zero={!row.reviewCount}
+                        title={tr.studyingToReview()}
+                    >
+                        {row.reviewCount}
+                    </span>
                 </span>
                 <span class="gear-col">
                     <button
@@ -82,7 +141,7 @@ deck's actions.
                         on:click|stopPropagation={() =>
                             (menuFor = menuFor === row.id ? null : row.id)}
                     >
-                        ⚙
+                        ⋯
                     </button>
                     {#if menuFor === row.id}
                         <!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
@@ -116,6 +175,7 @@ deck's actions.
                                 {tr.actionsExport()}
                             </button>
                             <button
+                                class="danger"
                                 on:click={() => {
                                     menuFor = null;
                                     dispatch("delete", row.id);
@@ -130,8 +190,8 @@ deck's actions.
         {/each}
     </div>
     <div class="footer">
-        <button class="create" on:click={() => dispatch("create")}>
-            {tr.decksCreateDeck()}
+        <button class="get-shared" on:click={() => dispatch("shared")}>
+            Get shared decks
         </button>
         {#if studiedToday}
             <div class="studied">{studiedToday}</div>
@@ -144,94 +204,135 @@ deck's actions.
         display: flex;
         flex-direction: column;
         height: 100%;
-        background: var(--canvas-inset);
-        border-inline-end: 1px solid var(--border);
+        background: var(--app-sidebar);
         user-select: none;
         font-size: 13px;
     }
     .drag-strip {
-        height: 38px;
+        height: 40px;
         flex: none;
     }
-    .header,
-    .row {
-        display: grid;
-        grid-template-columns: 18px minmax(0, 1fr) 36px 36px 36px 28px;
-        align-items: center;
-        gap: 2px;
-    }
     .header {
-        padding: 4px 8px;
-        color: var(--fg-subtle);
-        font-size: 11px;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 2px 12px 8px 16px;
     }
     .header .title {
-        grid-column: 1 / 3;
+        font-family: var(--app-font-display);
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--fg-subtle);
     }
-    .header .col {
-        text-align: end;
+    .add-anchor {
+        position: relative;
+    }
+    .add {
+        width: 24px;
+        height: 24px;
+        display: grid;
+        place-items: center;
+        font: inherit;
+        font-size: 17px;
+        line-height: 1;
+        color: var(--fg-subtle);
+        background: transparent;
+        border: 0;
+        border-radius: var(--app-radius-small);
+        cursor: pointer;
+    }
+    .add:hover,
+    .add[aria-expanded="true"] {
+        background: var(--app-surface);
+        color: var(--app-accent);
     }
     .rows {
         flex: 1;
         overflow-y: auto;
-        padding: 2px 0;
+        padding: 0 8px 8px;
     }
     .row {
-        padding: 5px 8px;
-        border-radius: var(--border-radius);
-        margin: 0 6px;
+        display: grid;
+        grid-template-columns: 16px minmax(0, 1fr) auto 22px;
+        align-items: center;
+        gap: 4px;
+        height: 32px;
+        padding-inline-end: 4px;
+        border-radius: var(--app-radius);
         cursor: default;
         color: var(--fg);
     }
     .row:hover {
-        background: var(--canvas-elevated);
+        background: var(--app-surface);
     }
     .row.current {
-        background: var(--selected-bg);
-        color: var(--selected-fg);
-    }
-    .row.filtered .name {
-        color: var(--fg-link);
+        background: var(--app-surface);
+        box-shadow: var(--app-shadow-card);
     }
     .row.current .name {
-        color: inherit;
+        font-weight: 600;
+        color: var(--fg);
+    }
+    .row.filtered .name {
+        color: var(--app-accent);
+    }
+    /* Nothing waiting in this deck today. */
+    .row.quiet .name {
+        color: var(--fg-subtle);
+    }
+    .row.quiet.current .name {
+        color: var(--fg);
     }
     .disclosure {
-        width: 18px;
+        width: 16px;
         text-align: center;
-        color: var(--fg-subtle);
+        font-size: 10px;
+        color: var(--fg-faint);
         background: transparent;
         border: 0;
         padding: 0;
-        font: inherit;
+        font-family: inherit;
         cursor: pointer;
     }
     .name {
+        font-family: var(--app-font-display);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
     }
+    .counts {
+        display: flex;
+        align-items: center;
+        gap: 3px;
+    }
     .count {
-        text-align: end;
+        min-width: 21px;
+        padding: 1px 5px;
+        border-radius: 999px;
+        text-align: center;
+        font-size: 11px;
+        font-weight: 600;
         font-variant-numeric: tabular-nums;
     }
     .count.new {
         color: var(--state-new);
+        background: var(--app-new-soft);
     }
     .count.learn {
         color: var(--state-learn);
+        background: var(--app-learn-soft);
     }
     .count.review {
         color: var(--state-review);
+        background: var(--app-review-soft);
     }
+    /* A zero count stays in place so the columns line up, but recedes. */
     .count.zero {
         color: var(--fg-faint);
-    }
-    .row.current .count {
-        color: inherit;
-        opacity: 0.9;
+        background: transparent;
+        font-weight: 400;
     }
     .gear-col {
         position: relative;
@@ -243,24 +344,30 @@ deck's actions.
         color: var(--fg-subtle);
         cursor: pointer;
         font: inherit;
-        padding: 0 4px;
+        line-height: 1;
+        padding: 2px 4px;
+        border-radius: var(--app-radius-small);
         opacity: 0;
     }
     .row:hover .gear,
     .row.current .gear {
         opacity: 1;
     }
+    .gear:hover {
+        background: var(--app-surface-sunken);
+        color: var(--fg);
+    }
     .menu {
         position: absolute;
         right: 0;
-        top: 100%;
-        min-width: 140px;
-        background: var(--canvas-elevated);
+        top: calc(100% + 4px);
+        min-width: 160px;
+        background: var(--app-surface);
         color: var(--fg);
-        border: 1px solid var(--border);
-        border-radius: var(--border-radius);
-        box-shadow: var(--shadow);
-        padding: 4px;
+        border: 1px solid var(--app-line);
+        border-radius: var(--app-radius);
+        box-shadow: var(--app-shadow-pop);
+        padding: 6px;
         display: flex;
         flex-direction: column;
         z-index: 20;
@@ -271,31 +378,44 @@ deck's actions.
         border: 0;
         font: inherit;
         color: inherit;
-        padding: 6px 10px;
+        padding: 7px 10px;
+        border-radius: var(--app-radius-small);
         cursor: pointer;
+        white-space: nowrap;
     }
     .menu button:hover {
-        background: var(--highlight-bg);
-        color: var(--highlight-fg);
+        background: var(--app-accent-soft);
+    }
+    .menu button.danger:hover {
+        color: var(--accent-danger);
     }
     .footer {
-        padding: 8px;
-        border-top: 1px solid var(--border);
+        padding: 10px 12px 14px;
         display: flex;
         flex-direction: column;
-        gap: 6px;
+        gap: 8px;
     }
-    .create {
+    .get-shared {
+        display: flex;
+        align-items: center;
+        gap: 8px;
         font: inherit;
-        color: var(--fg);
-        background: var(--button-bg);
-        border: 1px solid var(--border);
-        border-radius: var(--border-radius);
-        padding: 5px 10px;
+        font-size: 13px;
+        color: var(--fg-subtle);
+        background: transparent;
+        border: 0;
+        border-radius: var(--app-radius);
+        padding: 7px 10px;
         cursor: pointer;
+        text-align: start;
+    }
+    .get-shared:hover {
+        background: var(--app-surface);
+        color: var(--fg);
     }
     .studied {
         font-size: 11px;
-        color: var(--fg-subtle);
+        color: var(--fg-faint);
+        padding-inline-start: 10px;
     }
 </style>

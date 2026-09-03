@@ -51,7 +51,8 @@ stops at the dialog so the shell's single-key shortcuts do not fire behind it.
     .backdrop {
         position: fixed;
         inset: 0;
-        background: rgba(0, 0, 0, 0.35);
+        background: rgba(12, 15, 22, 0.32);
+        backdrop-filter: blur(3px);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -62,19 +63,19 @@ stops at the dialog so the shell's single-key shortcuts do not fire behind it.
         flex-direction: column;
         max-width: 96vw;
         max-height: 92vh;
-        background: var(--canvas);
+        background: var(--app-surface);
         color: var(--fg);
-        border: 1px solid var(--border);
-        border-radius: var(--border-radius);
-        box-shadow: var(--shadow);
+        border-radius: var(--app-radius-large);
+        box-shadow: var(--app-shadow-pop);
         outline: none;
     }
     .head {
         flex: none;
-        padding: 10px 16px;
+        padding: 14px 18px 12px;
+        font-family: var(--app-font-display);
+        font-size: 15px;
         font-weight: 600;
-        border-bottom: 1px solid var(--border);
-        background: var(--canvas-elevated);
+        border-bottom: 1px solid var(--app-line);
     }
     .body {
         flex: 1;
@@ -92,20 +93,24 @@ stops at the dialog so the shell's single-key shortcuts do not fire behind it.
         padding: 10px 16px;
         border-top: 1px solid var(--border);
     }
+    .foot {
+        border-top-color: var(--app-line);
+    }
     .foot :global(button) {
         font: inherit;
         color: var(--fg);
         background: var(--button-bg);
-        border: 1px solid var(--border);
-        border-radius: var(--border-radius);
-        padding: 5px 14px;
+        border: 1px solid var(--app-line);
+        border-radius: var(--app-radius);
+        padding: 6px 14px;
         cursor: pointer;
     }
     .foot :global(button:hover) {
         border-color: var(--button-hover-border);
     }
     .foot :global(button.primary) {
-        background: var(--button-primary-bg);
-        color: var(--button-primary-fg, #fff);
+        background: var(--app-accent);
+        color: var(--app-accent-fg);
+        font-weight: 600;
     }
 </style>

@@ -42,11 +42,14 @@ active.
     import NotetypesScreen from "./notetypes/NotetypesScreen.svelte";
     import Overview from "./Overview.svelte";
     import Reviewer from "./Reviewer.svelte";
+    import SharedDecksScreen from "./SharedDecksScreen.svelte";
+    import StudySettings from "./StudySettings.svelte";
     import { ReviewerController } from "./reviewer";
     import { installRpcDoneHook, isOperation, onRpcDone } from "./rpc-events";
     import RecorderDialog from "./RecorderDialog.svelte";
     import { GETTING_STARTED_URL } from "./links";
     import { installShellServices } from "./shell-services";
+    import { applyDesktopTheme } from "./theme";
     import { redoLast, undoLast } from "./undo";
     import { isTypingTarget, ShortcutMap } from "./shortcuts";
     import ToolHost, { type PageRequest } from "./tools/ToolHost.svelte";
@@ -65,6 +68,7 @@ active.
         | { kind: "review" }
         | { kind: "add" }
         | { kind: "notetypes" }
+        | { kind: "shared" }
         | { kind: "browse"; search: string | null }
         | { kind: "page"; title: string; src: string; onClose?: () => void };
 
@@ -121,6 +125,7 @@ active.
 
     function applyTheme(): void {
         nightMode = darkQuery.matches;
+        applyDesktopTheme(document);
         document.documentElement.classList.toggle("night-mode", nightMode);
         document.documentElement.dataset.bsTheme = nightMode ? "dark" : "light";
         document.body.classList.toggle("nightMode", nightMode);
@@ -223,6 +228,23 @@ active.
     // Fields.../Cards... buttons open for the note it is showing.
     function openNotetypes(): void {
         screen = { kind: "notetypes" };
+    }
+
+    /** Where a deck someone else made comes from (sidebar +, Tools, welcome). */
+    function openSharedDecks(): void {
+        screen = { kind: "shared" };
+    }
+
+    /** The handful of study settings worth changing, over the current screen. */
+    let studySettingsFor: bigint | null = null;
+
+    function openStudySettings(deckId: bigint): void {
+        studySettingsFor = deckId;
+    }
+
+    async function onStudySettingsSaved(): Promise<void> {
+        controller.invalidateConfig();
+        await refreshDecks();
     }
 
     function openFieldsFor(frame: Window): void {
@@ -538,6 +560,8 @@ active.
         on:delete={(e) => onDeleteDeck(e.detail)}
         on:create={onCreateDeck}
         on:export={(e) => tools?.run("export", e.detail)}
+        on:shared={openSharedDecks}
+        on:import={() => tools?.run("import")}
     />
 
     <main>
@@ -562,6 +586,11 @@ active.
                     ‹ {tr.actionsClose()}
                 </button>
                 <span class="title">Browse</span>
+            {:else if screen.kind === "shared"}
+                <button class="back" on:click={() => (screen = { kind: "overview" })}>
+                    ‹ {tr.actionsClose()}
+                </button>
+                <span class="title">Get Shared Decks</span>
             {:else if screen.kind === "review"}
                 <button class="back" on:click={onReviewFinished}>
                     ‹ {tr.actionsDecks()}
@@ -575,43 +604,49 @@ active.
                 </span>
             {/if}
             <span class="spacer"></span>
-            {#if screen.kind !== "browse"}
+            <div class="actions">
+                {#if screen.kind !== "browse"}
+                    <button
+                        class="tool"
+                        title={tr.actionsShortcutKey({ val: "B" })}
+                        on:click={() => openBrowser()}
+                    >
+                        Browse
+                    </button>
+                {/if}
+                {#if screen.kind !== "add"}
+                    <button
+                        class="tool"
+                        title={tr.actionsShortcutKey({ val: "A" })}
+                        on:click={openAdd}
+                    >
+                        {tr.actionsAdd()}
+                    </button>
+                {/if}
                 <button
                     class="tool"
-                    title={tr.actionsShortcutKey({ val: "B" })}
-                    on:click={() => openBrowser()}
+                    title={tr.actionsShortcutKey({ val: "T" })}
+                    on:click={() => tools?.run("stats")}
                 >
-                    Browse
+                    {tr.statisticsTitle()}
                 </button>
-            {/if}
-            {#if screen.kind !== "add"}
+                <ToolsMenu on:action={(e) => tools?.run(e.detail)} />
                 <button
-                    class="tool"
-                    title={tr.actionsShortcutKey({ val: "A" })}
-                    on:click={openAdd}
+                    class="tool sync"
+                    class:normal-sync={$syncStatus ===
+                        SyncStatusResponse_Required.NORMAL_SYNC}
+                    class:full-sync={$syncStatus ===
+                        SyncStatusResponse_Required.FULL_SYNC}
+                    title={tr.actionsShortcutKey({ val: "Y" })}
+                    on:click={() => void sync.sync()}
                 >
-                    {tr.actionsAdd()}
+                    <span class="dot" aria-hidden="true"></span>
+                    {SYNC_TITLE}
+                    <span class="spinner" class:spin={$syncing} aria-hidden="true">
+                        ⟳
+                    </span>
                 </button>
-            {/if}
-            <button
-                class="tool"
-                title={tr.actionsShortcutKey({ val: "T" })}
-                on:click={() => tools?.run("stats")}
-            >
-                {tr.statisticsTitle()}
-            </button>
-            <ToolsMenu on:action={(e) => tools?.run(e.detail)} />
-            <button
-                class="tool sync"
-                class:normal-sync={$syncStatus ===
-                    SyncStatusResponse_Required.NORMAL_SYNC}
-                class:full-sync={$syncStatus === SyncStatusResponse_Required.FULL_SYNC}
-                title={tr.actionsShortcutKey({ val: "Y" })}
-                on:click={() => void sync.sync()}
-            >
-                {SYNC_TITLE}
-                <span class="spinner" class:spin={$syncing} aria-hidden="true">⟳</span>
-            </button>
+            </div>
         </div>
 
         <div class="content">
@@ -648,6 +683,11 @@ active.
                     {nightMode}
                     on:close={closePage}
                 />
+            {:else if screen.kind === "shared"}
+                <SharedDecksScreen
+                    on:importPath={(e) => void tools?.importPath(e.detail)}
+                    on:importFile={() => void tools?.run("import")}
+                />
             {:else if screen.kind === "notetypes"}
                 <NotetypesScreen
                     version={notetypesVersion}
@@ -674,9 +714,28 @@ active.
                     on:customStudy={() => tools?.run("customStudy")}
                     on:add={openAdd}
                     on:import={() => tools?.run("import")}
+                    on:shared={openSharedDecks}
+                    on:studySettings={(e) => openStudySettings(e.detail)}
                 />
             {/if}
         </div>
+
+        {#if studySettingsFor !== null}
+            <StudySettings
+                deckId={studySettingsFor}
+                deckName={rows.find((r) => r.id === studySettingsFor)?.shortName ?? ""}
+                on:close={() => (studySettingsFor = null)}
+                on:saved={onStudySettingsSaved}
+                on:options={() => {
+                    const id = studySettingsFor;
+                    studySettingsFor = null;
+                    if (id !== null) {
+                        openDeckOptions(id);
+                    }
+                }}
+                on:notify={(e) => showToast(e.detail)}
+            />
+        {/if}
 
         {#if recorderResolve}
             <RecorderDialog
@@ -687,6 +746,7 @@ active.
 
         <ToolHost
             on:noteTypes={openNotetypes}
+            on:shared={openSharedDecks}
             bind:this={tools}
             deckId={currentDeckId}
             deckName={rows.find((r) => r.id === currentDeckId)?.name ?? ""}
@@ -717,16 +777,16 @@ active.
         overflow: hidden;
     }
     :global(body) {
-        background: var(--canvas);
+        background: var(--app-ground);
         color: var(--fg);
-        font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif;
+        font-family: var(--app-font-ui);
         font-size: 14px;
     }
     .app {
         display: grid;
-        grid-template-columns: 260px minmax(0, 1fr);
+        grid-template-columns: 252px minmax(0, 1fr);
         height: 100vh;
-        background: var(--canvas);
+        background: var(--app-ground);
     }
     main {
         display: flex;
@@ -734,20 +794,22 @@ active.
         min-width: 0;
         min-height: 0;
         position: relative;
+        background: var(--app-ground);
     }
     .titlebar {
-        height: 38px;
+        height: 52px;
         flex: none;
         display: flex;
         align-items: center;
-        gap: 12px;
-        padding: 0 16px;
-        border-bottom: 1px solid var(--border);
-        background: var(--canvas-elevated);
+        gap: 10px;
+        padding: 0 16px 0 20px;
         user-select: none;
     }
     .title {
+        font-family: var(--app-font-display);
+        font-size: 16px;
         font-weight: 600;
+        letter-spacing: -0.01em;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -757,43 +819,83 @@ active.
     }
     .back {
         font: inherit;
-        color: var(--fg-link);
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        color: var(--fg-subtle);
         background: transparent;
         border: 0;
-        padding: 2px 4px;
+        border-radius: var(--app-radius-small);
+        padding: 4px 8px 4px 4px;
         cursor: pointer;
+    }
+    .back:hover {
+        color: var(--fg);
+        background: var(--app-accent-soft);
+    }
+    .actions {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        background: var(--app-surface);
+        border-radius: var(--app-radius);
+        padding: 3px;
+        box-shadow: var(--app-shadow-card);
     }
     .tool {
         font: inherit;
-        color: var(--fg);
-        background: var(--button-bg);
-        border: 1px solid var(--border);
-        border-radius: var(--border-radius);
-        padding: 3px 10px;
+        font-size: 13px;
+        color: var(--fg-subtle);
+        background: transparent;
+        border: 0;
+        border-radius: var(--app-radius-small);
+        padding: 5px 10px;
         cursor: pointer;
+        white-space: nowrap;
+        transition:
+            background var(--transition),
+            color var(--transition);
     }
     .tool:hover {
-        border-color: var(--button-hover-border);
+        background: var(--app-surface-sunken);
+        color: var(--fg);
     }
-    /* Colours as in the Qt toolbar: pending changes, or a full sync ahead. */
-    .tool.normal-sync {
-        color: var(--state-review);
+    .tool:active {
+        background: var(--app-accent-soft);
     }
-    .tool.full-sync {
-        color: var(--accent-danger);
+    /* Pending changes, or a full sync ahead: a dot rather than coloured text. */
+    .tool.sync {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: transparent;
+    }
+    .tool.normal-sync .dot {
+        background: var(--state-review);
+    }
+    .tool.full-sync .dot {
+        background: var(--accent-danger);
     }
     .spinner {
-        display: inline-block;
-        margin-inline-start: 4px;
-        opacity: 0.6;
+        display: none;
     }
     .spinner.spin {
+        display: inline-block;
         animation: spin 1s linear infinite;
-        opacity: 1;
     }
     @keyframes spin {
         to {
             transform: rotate(360deg);
+        }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .spinner.spin {
+            animation: none;
         }
     }
     .content {
@@ -803,15 +905,16 @@ active.
     }
     .toast {
         position: absolute;
-        bottom: 64px;
+        bottom: 28px;
         left: 50%;
         transform: translateX(-50%);
-        background: var(--canvas-overlay);
+        background: var(--app-surface);
         color: var(--fg);
-        border: 1px solid var(--border);
-        border-radius: var(--border-radius);
-        padding: 6px 12px;
-        box-shadow: var(--shadow);
+        border-radius: var(--app-radius);
+        padding: 10px 16px;
+        box-shadow: var(--app-shadow-pop);
         z-index: 30;
+        max-width: 70%;
+        text-align: center;
     }
 </style>

@@ -21,6 +21,7 @@ export type ToolId =
     | "checkMedia"
     | "emptyCards"
     | "noteTypes"
+    | "sharedDecks"
     | "switchProfile"
     | "preferences";
 
@@ -53,6 +54,7 @@ export function toolSections(): ToolEntry[][] {
     const entry = (id: ToolId, label: string): ToolEntry => ({ id, label, shortcut: shortcutFor(id) });
     return [
         [
+            entry("sharedDecks", "Get Shared Decks…"),
             entry("switchProfile", "Switch Profile…"),
             entry("import", `${tr.actionsImport()}…`),
             entry("export", `${tr.actionsExport()}…`),

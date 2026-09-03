@@ -106,6 +106,13 @@ serve() {
         base="$ROOT/out/anki-e2e-base"
         rm -rf "$base"
         seed=(--seed 24)
+        # Get Shared Decks lists deck files from the Downloads folder; point
+        # it at a folder of our own so a test run never reads the real one.
+        local downloads="$ROOT/out/anki-e2e-downloads"
+        rm -rf "$downloads"
+        mkdir -p "$downloads"
+        printf 'not a real package' > "$downloads/Example Shared Deck.apkg"
+        export ANKI_DOWNLOADS_DIR="$downloads"
     fi
     build_app
     exec "$BIN" --serve "$port" --base "$base" "${seed[@]}"

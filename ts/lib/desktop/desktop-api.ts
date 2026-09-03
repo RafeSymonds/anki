@@ -3,6 +3,8 @@
 
 /** Calls into the host's native side (desktop/src/desktop_api.rs). */
 
+import type { DownloadedDeck } from "./shared-decks";
+
 export type SettingsScope = "profile" | "meta";
 
 async function post(command: string, body: string | Uint8Array): Promise<Response> {
@@ -114,6 +116,13 @@ export interface ProfileList {
 export async function listProfiles(): Promise<ProfileList> {
     const response = await post("profiles", "");
     return (await response.json()) as ProfileList;
+}
+
+/** Deck files sitting in Downloads, newest first (desktop/src/downloads.rs). */
+export async function downloadedDecks(): Promise<DownloadedDeck[]> {
+    const response = await post("downloadedDecks", "");
+    const { files } = (await response.json()) as { files: DownloadedDeck[] };
+    return files ?? [];
 }
 
 /** Close the current collection and open another profile's (created if new). */

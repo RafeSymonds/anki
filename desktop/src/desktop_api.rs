@@ -108,6 +108,7 @@ pub fn handle(state: &AppState, cmd: &str, body: &[u8]) -> Reply {
             json(Value::Null)
         }
         "profiles" => json(crate::profile::profiles_json(state)),
+        "downloadedDecks" => json(crate::downloads::downloaded_decks_json()),
         "switchProfile" => {
             let name = String::from_utf8_lossy(body).trim().to_string();
             result(

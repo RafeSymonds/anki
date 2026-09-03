@@ -69,27 +69,34 @@ Qt main window, with their shortcuts.
     }
     .tool {
         font: inherit;
-        color: var(--fg);
-        background: var(--button-bg);
-        border: 1px solid var(--border);
-        border-radius: var(--border-radius);
-        padding: 3px 10px;
+        font-size: 13px;
+        color: var(--fg-subtle);
+        background: transparent;
+        border: 0;
+        border-radius: var(--app-radius-small);
+        padding: 5px 10px;
         cursor: pointer;
+        white-space: nowrap;
+        transition:
+            background var(--transition),
+            color var(--transition);
     }
-    .tool:hover {
-        border-color: var(--button-hover-border);
+    .tool:hover,
+    .tool[aria-expanded="true"] {
+        background: var(--app-surface-sunken);
+        color: var(--fg);
     }
     .menu {
         position: absolute;
         right: 0;
-        top: calc(100% + 4px);
-        min-width: 220px;
-        background: var(--canvas-elevated);
+        top: calc(100% + 8px);
+        min-width: 230px;
+        background: var(--app-surface);
         color: var(--fg);
-        border: 1px solid var(--border);
-        border-radius: var(--border-radius);
-        box-shadow: var(--shadow);
-        padding: 4px;
+        border: 1px solid var(--app-line);
+        border-radius: var(--app-radius);
+        box-shadow: var(--app-shadow-pop);
+        padding: 6px;
         display: flex;
         flex-direction: column;
         z-index: 30;
@@ -108,8 +115,8 @@ Qt main window, with their shortcuts.
         border-radius: var(--border-radius);
     }
     .menu button:hover {
-        background: var(--highlight-bg);
-        color: var(--highlight-fg);
+        background: var(--app-accent-soft);
+        color: var(--fg);
     }
     .shortcut {
         color: var(--fg-subtle);
@@ -120,7 +127,7 @@ Qt main window, with their shortcuts.
     }
     .separator {
         height: 1px;
-        background: var(--border);
-        margin: 4px 6px;
+        background: var(--app-line);
+        margin: 5px 8px;
     }
 </style>
