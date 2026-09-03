@@ -61,6 +61,14 @@ impl RpcError {
         matches!(self, RpcError::UnknownMethod(_))
     }
 
+    /// The proto name of a backend error's kind ("SYNC_AUTH_ERROR", ...), so
+    /// the web side can act on it without parsing the message.
+    pub fn kind_name(&self) -> Option<&'static str> {
+        match self {
+            RpcError::Backend(err) => Some(err.kind().as_str_name()),
+            _ => None,
+        }
+    }
     pub fn is_not_found(&self) -> bool {
         matches!(self, RpcError::Backend(err) if err.kind() == Kind::NotFoundError)
     }

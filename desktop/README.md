@@ -15,12 +15,14 @@ desktop/                     Rust crate `anki-desktop` (Tauri app + HTTP mode)
   src/desktop_api.rs         /_desktop/{command}: native actions (links, files, dialogs, settings)
   src/settings.rs            per-profile JSON settings (replaces the Qt profile/meta pickles)
   src/profile.rs             data folder, profile folders, open/close collection
+  src/sync.rs                close/reopen the collection for the sync flow (/_desktop/closeCollection, reopenCollection)
   src/http.rs                loopback HTTP server for `anki-desktop --serve PORT`
   src/demo.rs                demo notes for dev/e2e collections
   src/menu.rs                native menu bar; choices run window.__ankiMenu(id) in the shell
   web/card.html              the document cards render in (loads js/reviewer.js)
   tests/backend.rs           integration tests against a temporary collection
   tests/simulation.rs        seeded random operation sequences with invariants (ANKI_SIM_SEED/STEPS)
+  tests/sync.rs              close/reopen and the error-kind header, against a temporary collection
   examples/seed.rs           `cargo run -p anki-desktop --example seed -- <profile dir>`
 ts/lib/desktop/              the Svelte app shell (mounted by ts/routes/+page.svelte)
   App.svelte                 shell: sidebar + screens (overview, review, add, embedded page)
@@ -35,6 +37,7 @@ ts/lib/desktop/              the Svelte app shell (mounted by ts/routes/+page.sv
   bridge.ts                  bridgeCommand/pycmd plumbing
   rpc-events.ts              "a backend call ran" notifications (stand-in for operation_did_execute)
   desktop-api.ts             calls to /_desktop/* (native side)
+  sync/                      AnkiWeb sync: sync.ts (port of qt/aqt/sync.py), sync-rpc.ts, SyncPanel.svelte, LoginSheet.svelte
   decks.ts, card-html.ts, audio.ts, shortcuts.ts   pure logic with vitest tests next to them
   notetypes/                 note type list, Fields dialog and card layout (models.py, fields.py, clayout.py)
 ts/tests/desktop/            Playwright e2e specs (run against `anki-desktop --serve`);

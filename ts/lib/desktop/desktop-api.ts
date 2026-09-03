@@ -34,6 +34,16 @@ export async function settingsSet(scope: SettingsScope, key: string, value: unkn
     await post("settingsSet", JSON.stringify({ scope, key, value: value ?? null }));
 }
 
+/** Close the open collection (desktop/src/sync.rs); harmless if closed. */
+export async function closeCollection(): Promise<void> {
+    await post("closeCollection", "");
+}
+
+/** Make sure the profile's collection is open again, e.g. after a full sync. */
+export async function reopenCollection(): Promise<void> {
+    await post("reopenCollection", "");
+}
+
 export interface FilePickerOptions {
     title?: string;
     filterDescription?: string;

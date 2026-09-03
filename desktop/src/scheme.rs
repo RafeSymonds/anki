@@ -14,6 +14,7 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use tauri::http::header;
+use tauri::http::HeaderValue;
 use tauri::http::Method;
 use tauri::http::Request;
 use tauri::http::Response;
@@ -31,6 +32,9 @@ pub const INIT_SCRIPT_PATH: &str = "/_desktop/init.js";
 /// The document cards are rendered in. See web/card.html.
 pub const CARD_FRAME_PATH: &str = "/_desktop/card.html";
 const CARD_FRAME_HTML: &str = include_str!("../web/card.html");
+
+/// Response header naming a failed RPC's backend error kind (rpc.rs).
+pub const ERROR_KIND_HEADER: &str = "anki-error-kind";
 
 /// Top-level SvelteKit routes. Same list as `get_sveltekit_route` in
 /// mediasrv.py; any other root path is a media file.
@@ -343,7 +347,15 @@ fn run_rpc(state: &AppState, name: &str, body: &[u8]) -> Reply {
         // rather than an error; pages probe optional keys this way.
         Err(err) if name == "getConfigJson" && err.is_not_found() => binary(rpc::json_null()),
         Err(err) if err.is_unknown_method() => text(StatusCode::NOT_FOUND, err.message()),
-        Err(err) => text(StatusCode::INTERNAL_SERVER_ERROR, err.message()),
+        Err(err) => {
+            let mut reply = text(StatusCode::INTERNAL_SERVER_ERROR, err.message());
+            if let Some(kind) = err.kind_name() {
+                reply
+                    .headers_mut()
+                    .insert(ERROR_KIND_HEADER, HeaderValue::from_static(kind));
+            }
+            reply
+        }
     }
 }
 
