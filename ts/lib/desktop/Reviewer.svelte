@@ -82,8 +82,13 @@ Edit, Undo and the card actions menu.
 
     /** `check_timebox` in reviewer.py: Continue keeps studying, Finish leaves. */
     async function onTimebox(hit: { minutes: number; cards: number }): Promise<void> {
-        const message = tr.studyingCardStudiedInMinute({ cards: hit.cards, minutes: String(hit.minutes) });
-        const keepGoing = confirm(`${message}\n\nOK: ${tr.studyingContinue()}   Cancel: ${tr.studyingFinish()}`);
+        const message = tr.studyingCardStudiedInMinute({
+            cards: hit.cards,
+            minutes: String(hit.minutes),
+        });
+        const keepGoing = confirm(
+            `${message}\n\nOK: ${tr.studyingContinue()}   Cancel: ${tr.studyingFinish()}`,
+        );
         if (keepGoing) {
             await controller.continueAfterTimebox();
         } else {

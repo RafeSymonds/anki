@@ -26,3 +26,4 @@ docs/autoapi/
 .complexipy_cache
 /desktop/gen
 /out/anki-desktop.pid
+/.claude/worktrees/
