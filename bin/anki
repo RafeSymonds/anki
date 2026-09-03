@@ -10,6 +10,9 @@
 #   bin/anki serve [port] [--fresh]   serve over loopback HTTP (no window); --fresh uses a
 #                              throwaway seeded collection under out/anki-e2e-base
 #   bin/anki e2e               run the Playwright end-to-end tests against `serve`
+#   bin/anki sveltekit         rebuild only the SvelteKit app (the shell) without ninja
+#   bin/anki e2e-quick [port] [playwright args]   e2e without rebuilding assets
+#   bin/anki worktree-init     prepare out/ in a git worktree (shares heavy deps with the main checkout)
 #
 # Env: ANKI_BASE (profile folder), ANKI_START_ROUTE (page to open, e.g. /congrats)
 
@@ -106,6 +109,43 @@ serve() {
     exec "$BIN" --serve "$port" --base "$base" "${seed[@]}"
 }
 
+# The main checkout's out/ holds the downloaded toolchain and node_modules;
+# a worktree links those and copies the small build products so it can build
+# the SvelteKit app and run e2e on its own without ninja.
+MAIN_ROOT="/Users/rafe/other/anki"
+
+worktree_init() {
+    if [[ "$ROOT" == "$MAIN_ROOT" ]]; then
+        echo "already the main checkout"
+        return 0
+    fi
+    mkdir -p "$ROOT/out"
+    for d in node_modules pyenv extracted playwright-browsers; do
+        [[ -e "$ROOT/out/$d" ]] || ln -s "$MAIN_ROOT/out/$d" "$ROOT/out/$d"
+    done
+    for d in rslib ts qt sveltekit; do
+        [[ -e "$ROOT/out/$d" ]] || cp -R "$MAIN_ROOT/out/$d" "$ROOT/out/$d"
+    done
+    [[ -e "$ROOT/out/buildhash" ]] || cp "$MAIN_ROOT/out/buildhash" "$ROOT/out/buildhash" 2>/dev/null || true
+    [[ -e "$ROOT/node_modules" ]] || ln -s out/node_modules "$ROOT/node_modules"
+    echo "worktree ready: $ROOT"
+}
+
+sveltekit_build() {
+    echo "==> building SvelteKit app"
+    (cd "$ROOT/ts" && ../out/extracted/node/bin/node ../out/node_modules/.bin/svelte-kit sync >/dev/null && ../out/extracted/node/bin/node ../out/node_modules/.bin/vite build)
+    rm -rf "$ROOT/out/qt/_aqt/data/web/sveltekit"
+    mkdir -p "$ROOT/out/qt/_aqt/data/web"
+    cp -R "$ROOT/out/sveltekit" "$ROOT/out/qt/_aqt/data/web/sveltekit"
+}
+
+e2e_quick() {
+    local port="${1:-40100}"
+    shift || true
+    PLAYWRIGHT_BROWSERS_PATH="$ROOT/out/playwright-browsers" ANKI_DESKTOP_PORT="$port" \
+        "$ROOT/out/extracted/node/bin/yarn" playwright test -c playwright.desktop.config.ts "$@"
+}
+
 status() {
     if is_running; then
         echo "running (pid $(pid))"
@@ -124,8 +164,11 @@ case "${1:-}" in
     logs) tail -n 50 -f "$LOG" ;;
     serve) shift; serve "$@" ;;
     e2e) just test-e2e-desktop ;;
+    sveltekit) sveltekit_build ;;
+    e2e-quick) shift; e2e_quick "$@" ;;
+    worktree-init) worktree_init ;;
     *)
-        sed -n '2,14p' "$0"
+        sed -n '2,17p' "$0"
         exit 2
         ;;
 esac
