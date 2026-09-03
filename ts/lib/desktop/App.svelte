@@ -21,6 +21,7 @@ active.
         fetchCurrentDeckId,
         fetchDeckTree,
         flattenTree,
+        isFreshCollection,
         renameDeckTo,
         selectDeck,
         setCollapsed,
@@ -185,8 +186,12 @@ active.
         };
     }
 
+    /** True while the add screen is open on a collection that had no cards. */
+    let addingFirstCards = false;
+
     function openAdd(): void {
         if (screen.kind !== "add") {
+            addingFirstCards = tree !== null && isFreshCollection(tree);
             screen = { kind: "add" };
         }
     }
@@ -197,9 +202,15 @@ active.
         onClose?.();
     }
 
-    function closeAdd(): void {
+    async function closeAdd(): Promise<void> {
         screen = { kind: "overview" };
-        void refreshDecks();
+        await refreshDecks();
+        if (addingFirstCards && tree && !isFreshCollection(tree)) {
+            showToast(
+                "Your first cards are ready. Press Study Now when you want to start.",
+            );
+        }
+        addingFirstCards = false;
     }
 
     // Note types: the list screen, and the dialogs the editor's

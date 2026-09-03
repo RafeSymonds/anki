@@ -201,6 +201,10 @@ fn collection_is_empty(backend: &Backend) -> bool {
         .unwrap_or(false)
 }
 
+/// Per-profile flag (see ts/lib/desktop/first-card.ts) set once the guide
+/// over the answer buttons has been shown.
+pub const FIRST_CARD_GUIDE_KEY: &str = "firstCardGuideShown";
+
 /// Open the default profile's collection and build the shared state.
 pub fn open_state(options: &Options, web: WebRoot) -> AppState {
     let backend = new_backend();
@@ -222,6 +226,17 @@ pub fn open_state(options: &Options, web: WebRoot) -> AppState {
     }
 
     let settings = Settings::load(&profile_dir);
+    if options.seed.is_some() {
+        // Seeded (dev/test) profiles skip the one-time first-card guide so
+        // the e2e specs see the plain reviewer; the guide has its own spec.
+        settings
+            .set(
+                settings::Scope::Profile,
+                FIRST_CARD_GUIDE_KEY,
+                serde_json::Value::Bool(true),
+            )
+            .expect("write profile settings");
+    }
     let state = AppState::new(backend, web, settings, base.clone());
     state.set_media_dir(Some(
         profile::CollectionPaths::in_profile(&profile_dir).media_folder,

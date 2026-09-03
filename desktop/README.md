@@ -131,6 +131,12 @@ the Qt recorder's file. macOS only grants the microphone to a process with
 embeds it into the bare binary's `__info_plist` section for `bin/anki start`
 and the tests. The e2e spec stubs `getUserMedia` with a synthetic tone.
 
+**First-run guide.** The first time a profile reviews a card, the reviewer
+shows a one-time guide over the answer buttons (`FirstCardOverlay.svelte`,
+`first-card.ts`); the per-profile setting `firstCardGuideShown` records the
+dismissal. `--seed` (dev and e2e collections) presets it, so the specs see
+the plain reviewer; `first-card.spec.ts` clears it through `settingsSet`.
+
 **Profiles.** Each folder under the data folder (`profile.rs`: `ANKI_BASE`,
 else `~/Library/Application Support/Anki2`) is a profile with its own
 collection, media and `desktop-settings.json`. The app opens the first one

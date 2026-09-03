@@ -11,7 +11,10 @@ Edit, Undo and the card actions menu.
     import { createEventDispatcher, onDestroy, onMount } from "svelte";
 
     import CardFrame from "./CardFrame.svelte";
+    import { settingsGet, settingsSet } from "./desktop-api";
     import EditorPanel from "./EditorPanel.svelte";
+    import { FIRST_CARD_GUIDE_KEY, guideNeeded } from "./first-card";
+    import FirstCardOverlay from "./FirstCardOverlay.svelte";
     import type { Ease, ReviewerController } from "./reviewer";
     import { onRpcDone } from "./rpc-events";
     import { isTypingTarget, ShortcutMap, shortcutLabel } from "./shortcuts";
@@ -45,6 +48,24 @@ Edit, Undo and the card actions menu.
     let offRpcDone: (() => void) | undefined;
 
     const easeKeys: Record<Ease, string> = { 1: "1", 2: "2", 3: "3", 4: "4" };
+
+    // One-time guide over the answer buttons (per profile). It goes away
+    // with "Got it" or with the first answer, and is not shown again.
+    let showGuide = false;
+    void settingsGet("profile", FIRST_CARD_GUIDE_KEY)
+        .then((stored) => (showGuide = guideNeeded(stored)))
+        .catch(() => (showGuide = false));
+    $: guideVisible = showGuide && $state === "answer" && $buttons.length > 0;
+    $: if (showGuide && $state === "transition") {
+        dismissGuide();
+    }
+    function dismissGuide(): void {
+        if (!showGuide) {
+            return;
+        }
+        showGuide = false;
+        void settingsSet("profile", FIRST_CARD_GUIDE_KEY, true);
+    }
 
     const shortcuts = new ShortcutMap().addAll([
         ["e", () => toggleEditing()],
@@ -261,6 +282,9 @@ Edit, Undo and the card actions menu.
                     {/if}
                 </button>
             {:else if $state === "answer"}
+                {#if guideVisible}
+                    <FirstCardOverlay buttons={$buttons} on:dismiss={dismissGuide} />
+                {/if}
                 {#each $buttons as button (button.ease)}
                     <button
                         class="ease ease{button.ease}"
@@ -471,6 +495,7 @@ Edit, Undo and the card actions menu.
         gap: 10px;
     }
     .middle {
+        position: relative;
         display: flex;
         gap: 8px;
         align-items: stretch;

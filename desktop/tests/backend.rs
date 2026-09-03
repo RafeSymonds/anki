@@ -254,3 +254,28 @@ fn reseeding_still_works_after_a_stock_notetype_gained_a_field() {
     .unwrap();
     assert_eq!(found.ids.len(), 8);
 }
+
+#[test]
+fn seeded_profiles_skip_the_first_card_guide() {
+    let base = tempfile::tempdir().unwrap();
+    let options = anki_desktop::Options {
+        base: Some(base.path().to_path_buf()),
+        seed: Some(2),
+        ..Default::default()
+    };
+    let state = anki_desktop::open_state(&options, WebRoot::from_repo());
+    assert_eq!(
+        state.settings_get(anki_desktop::settings::Scope::Profile, anki_desktop::FIRST_CARD_GUIDE_KEY),
+        serde_json::Value::Bool(true)
+    );
+
+    let unseeded = anki_desktop::Options {
+        base: Some(tempfile::tempdir().unwrap().path().to_path_buf()),
+        ..Default::default()
+    };
+    let state = anki_desktop::open_state(&unseeded, WebRoot::from_repo());
+    assert_eq!(
+        state.settings_get(anki_desktop::settings::Scope::Profile, anki_desktop::FIRST_CARD_GUIDE_KEY),
+        serde_json::Value::Null
+    );
+}
