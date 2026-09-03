@@ -10,6 +10,7 @@
 pub mod demo;
 pub mod desktop_api;
 pub mod http;
+pub mod menu;
 pub mod profile;
 pub mod rpc;
 pub mod scheme;
@@ -177,6 +178,16 @@ fn run_window(options: Options) {
     eprintln!("serving web assets from {}", state.web.web.display());
     state.set_app_handle(app.handle().clone());
     app.manage(state);
+
+    match menu::build(app.handle()) {
+        Ok(menu) => {
+            if let Err(err) = app.set_menu(menu) {
+                eprintln!("menu: {err}");
+            }
+            app.on_menu_event(menu::on_event);
+        }
+        Err(err) => eprintln!("menu: {err}"),
+    }
 
     let url = format!("anki://localhost{}", start_route());
     WebviewWindowBuilder::new(
