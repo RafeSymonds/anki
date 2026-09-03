@@ -69,6 +69,9 @@ pub fn handle(state: &AppState, cmd: &str, body: &[u8]) -> Reply {
             ),
             Err(err) => text(StatusCode::BAD_REQUEST, err.to_string()),
         },
+        // Collection close/reopen for the sync flow; see sync.rs.
+        "closeCollection" => result(crate::sync::close_collection(state).map(|_| Value::Null)),
+        "reopenCollection" => result(crate::sync::reopen_collection(state).map(|_| Value::Null)),
         "openFilePicker" => {
             let req: FilePick = serde_json::from_slice(body).unwrap_or_default();
             let path = pick_file(state, &req)

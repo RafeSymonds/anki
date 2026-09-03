@@ -14,6 +14,7 @@ pub mod profile;
 pub mod rpc;
 pub mod scheme;
 pub mod settings;
+pub mod sync;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -41,6 +42,8 @@ pub struct AppState {
     pub settings: Settings,
     /// Media folder of the open collection, if any.
     media_dir: Mutex<Option<PathBuf>>,
+    /// Folder of the open profile; needed to reopen its collection (sync.rs).
+    profile_dir: Mutex<Option<PathBuf>>,
     /// Set once the Tauri app exists; absent in `--serve` mode.
     app: Mutex<Option<AppHandle>>,
     /// Native dialogs must run here.
@@ -54,6 +57,7 @@ impl AppState {
             web,
             settings,
             media_dir: Mutex::new(None),
+            profile_dir: Mutex::new(None),
             app: Mutex::new(None),
             main_thread: std::thread::current().id(),
         }
@@ -77,6 +81,14 @@ impl AppState {
 
     pub fn set_media_dir(&self, dir: Option<PathBuf>) {
         *self.media_dir.lock().expect("media dir lock") = dir;
+    }
+
+    pub fn profile_dir(&self) -> Option<PathBuf> {
+        self.profile_dir.lock().expect("profile dir lock").clone()
+    }
+
+    pub fn set_profile_dir(&self, dir: Option<PathBuf>) {
+        *self.profile_dir.lock().expect("profile dir lock") = dir;
     }
 }
 
@@ -148,6 +160,7 @@ pub fn open_state(options: &Options) -> AppState {
     state.set_media_dir(Some(
         profile::CollectionPaths::in_profile(&profile_dir).media_folder,
     ));
+    state.set_profile_dir(Some(profile_dir));
     state
 }
 

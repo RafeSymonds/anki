@@ -8,6 +8,7 @@ active.
 -->
 <script lang="ts">
     import type { DeckTreeNode } from "@generated/anki/decks_pb";
+    import { SyncStatusResponse_Required } from "@generated/anki/sync_pb";
     import { studiedToday } from "@generated/backend";
     import * as tr from "@generated/ftl";
     import { onDestroy, onMount } from "svelte";
@@ -24,6 +25,7 @@ active.
         setCollapsed,
     } from "./decks";
     import DeckSidebar from "./DeckSidebar.svelte";
+    import { reopenCollection, settingsGet, settingsSet } from "./desktop-api";
     import EditorPanel from "./EditorPanel.svelte";
     import EmbeddedPage from "./EmbeddedPage.svelte";
     import { installFrontendService } from "./frontend-service";
@@ -33,6 +35,9 @@ active.
     import { installRpcDoneHook, isOperation, onRpcDone } from "./rpc-events";
     import { installShellServices } from "./shell-services";
     import { isTypingTarget, ShortcutMap } from "./shortcuts";
+    import { SYNC_TITLE, SyncController } from "./sync/sync";
+    import { backendSyncRpc } from "./sync/sync-rpc";
+    import SyncPanel from "./sync/SyncPanel.svelte";
 
     type Screen =
         | { kind: "overview" }
@@ -54,6 +59,29 @@ active.
     let toastTimer: ReturnType<typeof setTimeout> | undefined;
     let refreshTimer: ReturnType<typeof setTimeout> | undefined;
     const controller = new ReviewerController();
+
+    // AnkiWeb sync (sync/sync.ts); SyncPanel below renders its prompts.
+    const sync = new SyncController(
+        backendSyncRpc,
+        {
+            get: (key) => settingsGet("profile", key),
+            set: (key, value) => settingsSet("profile", key, value),
+        },
+        {
+            notify: (message) => showToast(message),
+            willFullSync: () => {
+                screen = { kind: "overview" };
+            },
+            didFullSync: async () => {
+                await reopenCollection();
+                controller.invalidateConfig();
+                await refreshDecks();
+            },
+            didSync: () => refreshDecks(),
+        },
+    );
+    const syncing = sync.syncing;
+    const syncStatus = sync.status;
 
     const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
 
@@ -189,6 +217,7 @@ active.
             },
         ],
         ["a", () => openAdd()],
+        ["y", () => void sync.sync()],
         [
             "s",
             () => {
@@ -258,6 +287,11 @@ active.
         });
         currentDeckId = await fetchCurrentDeckId();
         await refreshDecks();
+        // maybe_auto_sync_on_open_close in main.py; the shell has no quit
+        // hook yet, so only the open side exists.
+        if (!(await sync.autoSync())) {
+            void sync.refreshStatus();
+        }
     });
 
     onDestroy(() => {
@@ -315,6 +349,17 @@ active.
                     {tr.actionsAdd()}
                 </button>
             {/if}
+            <button
+                class="tool sync"
+                class:normal-sync={$syncStatus ===
+                    SyncStatusResponse_Required.NORMAL_SYNC}
+                class:full-sync={$syncStatus === SyncStatusResponse_Required.FULL_SYNC}
+                title={tr.actionsShortcutKey({ val: "Y" })}
+                on:click={() => void sync.sync()}
+            >
+                {SYNC_TITLE}
+                <span class="spinner" class:spin={$syncing} aria-hidden="true">⟳</span>
+            </button>
         </div>
 
         <div class="content">
@@ -357,6 +402,8 @@ active.
         {#if toast}
             <div class="toast">{toast}</div>
         {/if}
+
+        <SyncPanel controller={sync} />
     </main>
 </div>
 
@@ -424,6 +471,27 @@ active.
     }
     .tool:hover {
         border-color: var(--button-hover-border);
+    }
+    /* Colours as in the Qt toolbar: pending changes, or a full sync ahead. */
+    .tool.normal-sync {
+        color: var(--state-review);
+    }
+    .tool.full-sync {
+        color: var(--accent-danger);
+    }
+    .spinner {
+        display: inline-block;
+        margin-inline-start: 4px;
+        opacity: 0.6;
+    }
+    .spinner.spin {
+        animation: spin 1s linear infinite;
+        opacity: 1;
+    }
+    @keyframes spin {
+        to {
+            transform: rotate(360deg);
+        }
     }
     .content {
         flex: 1;
