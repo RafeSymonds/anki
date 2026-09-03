@@ -187,8 +187,8 @@ release() {
     if [[ -n "$(git status --porcelain)" ]]; then
         echo "working tree is dirty; the release is built from what is pushed" >&2
     fi
-    if ! git diff --quiet "@{upstream}" 2>/dev/null; then
-        echo "note: $branch differs from its upstream; push first or the release will miss commits" >&2
+    if [[ -n "$(git log --oneline "@{upstream}..HEAD" 2>/dev/null)" ]]; then
+        echo "note: $branch has commits that are not pushed; the release is built from origin" >&2
     fi
     gh workflow run desktop-release.yml --ref "$branch" -f version="$version" -f publish=true
     echo "watch it with: gh run watch \$(gh run list --workflow=desktop-release.yml --limit 1 --json databaseId --jq '.[0].databaseId')"
