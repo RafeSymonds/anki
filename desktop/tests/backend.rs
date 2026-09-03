@@ -265,7 +265,10 @@ fn seeded_profiles_skip_the_first_card_guide() {
     };
     let state = anki_desktop::open_state(&options, WebRoot::from_repo());
     assert_eq!(
-        state.settings_get(anki_desktop::settings::Scope::Profile, anki_desktop::FIRST_CARD_GUIDE_KEY),
+        state.settings_get(
+            anki_desktop::settings::Scope::Profile,
+            anki_desktop::FIRST_CARD_GUIDE_KEY
+        ),
         serde_json::Value::Bool(true)
     );
 
@@ -275,7 +278,10 @@ fn seeded_profiles_skip_the_first_card_guide() {
     };
     let state = anki_desktop::open_state(&unseeded, WebRoot::from_repo());
     assert_eq!(
-        state.settings_get(anki_desktop::settings::Scope::Profile, anki_desktop::FIRST_CARD_GUIDE_KEY),
+        state.settings_get(
+            anki_desktop::settings::Scope::Profile,
+            anki_desktop::FIRST_CARD_GUIDE_KEY
+        ),
         serde_json::Value::Null
     );
 }
