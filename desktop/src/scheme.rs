@@ -291,14 +291,21 @@ fn html(page: String) -> Reply {
 
 fn run_rpc(state: &AppState, name: &str, body: &[u8]) -> Reply {
     match rpc::call(&state.backend, name, body) {
-        Ok(bytes) => Response::builder()
-            .status(StatusCode::OK)
-            .header(header::CONTENT_TYPE, "application/binary")
-            .body(Cow::Owned(bytes))
-            .expect("rpc response"),
+        Ok(bytes) => binary(bytes),
+        // mediasrv.py's get_config_json answers a missing key with null
+        // rather than an error; pages probe optional keys this way.
+        Err(err) if name == "getConfigJson" && err.is_not_found() => binary(rpc::json_null()),
         Err(err) if err.is_unknown_method() => text(StatusCode::NOT_FOUND, err.message()),
         Err(err) => text(StatusCode::INTERNAL_SERVER_ERROR, err.message()),
     }
+}
+
+fn binary(bytes: Vec<u8>) -> Reply {
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "application/binary")
+        .body(Cow::Owned(bytes))
+        .expect("rpc response")
 }
 
 fn serve_media(state: &AppState, name: &str) -> Reply {

@@ -4,12 +4,19 @@
 use anki_desktop::new_backend;
 use anki_desktop::profile;
 use anki_desktop::rpc;
+use anki_desktop::scheme;
+use anki_desktop::AppState;
+use anki_desktop::Settings;
+use anki_desktop::WebRoot;
 use anki_proto::decks::DeckNames;
 use anki_proto::decks::GetDeckNamesRequest;
 use anki_proto::generic::Empty;
 use anki_proto::generic::Json;
+use anki_proto::generic::String as PbString;
 use anki_proto::i18n::I18nResourcesRequest;
 use anki_proto::scheduler::CongratsInfoResponse;
+use prost::Message;
+use tauri::http::Method;
 
 #[test]
 fn opens_a_fresh_collection_and_serves_rpcs() {
@@ -72,4 +79,33 @@ fn calls_before_a_collection_is_open_fail_cleanly() {
             .unwrap_err();
     assert!(!err.is_unknown_method());
     assert!(!err.message().is_empty());
+}
+
+#[test]
+fn missing_config_keys_answer_null_like_mediasrv() {
+    let dir = tempfile::tempdir().unwrap();
+    let backend = new_backend();
+    profile::open_collection(&backend, dir.path()).unwrap();
+    let state = AppState::new(
+        backend,
+        WebRoot {
+            web: dir.path().join("web"),
+        },
+        Settings::load(dir.path()),
+    );
+
+    let body = PbString {
+        val: "renderMathjax".into(),
+    }
+    .encode_to_vec();
+    let reply = scheme::dispatch(&state, &Method::POST, "/_anki/getConfigJson", &body);
+    assert_eq!(reply.status(), 200);
+    let json = Json::decode(reply.body().as_ref()).unwrap();
+    assert_eq!(json.json, b"null");
+
+    // Other errors still surface as 500s with the backend's message.
+    let reply = scheme::dispatch(&state, &Method::POST, "/_anki/getCard", &[]);
+    assert_eq!(reply.status(), 500);
+
+    profile::close_collection(&state.backend).unwrap();
 }

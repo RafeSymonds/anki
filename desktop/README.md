@@ -50,7 +50,7 @@ which `postProto` alerts and rethrows. Nothing in Python is involved.
 
 **FrontendService.** Methods in `proto/anki/frontend.proto` (askUser,
 openFilePicker, closeAddCards, deckOptionsRequireClose, getSchedulingStatesWithContext, ...)
-are calls the web code makes *to the GUI*. The host injects a shim
+are calls the web code makes _to the GUI_. The host injects a shim
 (`scheme.rs::init_script`, served at `/_desktop/init.js` and inserted as the
 first script of every HTML document) that redirects those fetches to
 `window.top.__ankiFrontendService(method, bytes, frame)`, i.e.

@@ -35,4 +35,5 @@ serde_json.workspace = true
 tauri.workspace = true
 
 [dev-dependencies]
+rand.workspace = true
 tempfile.workspace = true

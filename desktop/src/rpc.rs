@@ -57,6 +57,18 @@ impl RpcError {
     pub fn is_unknown_method(&self) -> bool {
         matches!(self, RpcError::UnknownMethod(_))
     }
+
+    pub fn is_not_found(&self) -> bool {
+        matches!(self, RpcError::Backend(err) if err.kind() == Kind::NotFoundError)
+    }
+}
+
+/// An encoded `generic.Json` holding `null`.
+pub fn json_null() -> Vec<u8> {
+    anki_proto::generic::Json {
+        json: b"null".to_vec(),
+    }
+    .encode_to_vec()
 }
 
 impl fmt::Display for RpcError {

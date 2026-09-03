@@ -37,8 +37,8 @@ import {
     encodeIriPaths,
     extractAvTags,
     extractClozeForTyping,
+    getAllConfig,
     getConfigBool,
-    getConfigJson,
     getDeck,
     getDeckConfig,
     getNote,
@@ -289,9 +289,11 @@ export class ReviewerController {
 
     private async loadPrefs(): Promise<void> {
         this.hidePlayButtons = await this.configBool(ConfigKey_Bool.HIDE_AUDIO_PLAY_BUTTONS);
-        this.showIntervals = await this.configJson<boolean>("estTimes", true);
-        this.showCounts.set(await this.configJson<boolean>("dueCounts", true));
-        this.stateMutationJs = await this.configJson<string>("cardStateCustomizer", "");
+        // Legacy JSON keys; read them all at once so missing ones do not error.
+        const config = await this.allConfig();
+        this.showIntervals = (config.estTimes as boolean | undefined) ?? true;
+        this.showCounts.set((config.dueCounts as boolean | undefined) ?? true);
+        this.stateMutationJs = (config.cardStateCustomizer as string | undefined) ?? "";
     }
 
     private async configBool(key: ConfigKey_Bool): Promise<boolean> {
@@ -302,13 +304,12 @@ export class ReviewerController {
         }
     }
 
-    private async configJson<T>(key: string, fallback: T): Promise<T> {
+    private async allConfig(): Promise<Record<string, unknown>> {
         try {
-            const response = await getConfigJson({ val: key }, { alertOnError: false });
-            const parsed = JSON.parse(new TextDecoder().decode(response.json));
-            return (parsed ?? fallback) as T;
+            const response = await getAllConfig({}, { alertOnError: false });
+            return JSON.parse(new TextDecoder().decode(response.json)) as Record<string, unknown>;
         } catch {
-            return fallback;
+            return {};
         }
     }
 
