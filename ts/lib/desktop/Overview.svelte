@@ -644,8 +644,32 @@ more cards and to the settings that decide how much comes back tomorrow.
         gap: 8px;
         margin-top: 16px;
     }
+    /* The upstream page centres a 450px column inside its own window; here
+     * it should fill the card it sits in. */
     .congrats :global(.congrats) {
         text-align: start;
+        max-width: none;
+        width: 100%;
+    }
+    .congrats :global(.container) {
+        padding: 0;
+        max-width: none;
+    }
+    /* The upstream page is sized for a window of its own. */
+    .congrats :global(h1) {
+        font-family: var(--app-font-display);
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        margin: 0 0 8px;
+    }
+    .congrats :global(.congrats p) {
+        margin: 0 0 6px;
+        color: var(--fg-subtle);
+        line-height: 1.5;
+    }
+    .congrats :global(a) {
+        color: var(--fg-link);
     }
     .limit-notice {
         margin: 12px 0 0;

@@ -147,19 +147,22 @@ ors with it, Alt negates it, as in qt/aqt/browser/sidebar/tree.py.
         flex-direction: column;
         height: 100%;
         min-height: 0;
-        background: var(--canvas-inset);
-        border-inline-end: 1px solid var(--border);
+        background: transparent;
         user-select: none;
         font-size: 13px;
     }
     .filter {
-        margin: 6px;
+        margin: 10px 4px 6px;
         font: inherit;
         color: var(--fg);
-        background: var(--canvas-elevated);
-        border: 1px solid var(--border);
-        border-radius: var(--border-radius);
-        padding: 3px 6px;
+        background: var(--app-surface);
+        border: 1px solid transparent;
+        border-radius: var(--app-radius);
+        padding: 6px 10px;
+    }
+    .filter:focus {
+        outline: none;
+        border-color: var(--app-accent);
     }
     .rows {
         flex: 1;
@@ -196,14 +199,16 @@ ors with it, Alt negates it, as in qt/aqt/browser/sidebar/tree.py.
     .row {
         display: flex;
         align-items: center;
-        gap: 4px;
-        padding: 3px 8px;
+        gap: 6px;
+        margin: 0 4px;
+        padding: 5px 8px;
+        border-radius: var(--app-radius-small);
         color: var(--fg);
         cursor: default;
         white-space: nowrap;
     }
     .row.section {
-        margin-top: 6px;
+        margin-top: 10px;
         font-weight: 600;
         color: var(--fg-subtle);
         text-transform: uppercase;
@@ -211,7 +216,7 @@ ors with it, Alt negates it, as in qt/aqt/browser/sidebar/tree.py.
         letter-spacing: 0.04em;
     }
     .row:hover {
-        background: var(--canvas-elevated);
+        background: var(--app-surface);
     }
     .disclosure {
         width: 16px;

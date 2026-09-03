@@ -113,6 +113,18 @@ test.describe("adding and editing notes", () => {
         await expect(editor.locator(".field-container").first()).toBeVisible({ timeout: 20_000 });
         const picker = page.getByRole("radiogroup", { name: "Kind of card" });
         await expect(picker).toBeVisible();
+        // Reopening starts the picker on the type the editor is showing,
+        // rather than on nothing until something is clicked.
+        await picker.getByRole("radio", { name: "Basic", exact: true }).click();
+        await expect(fieldLabel(editor, 0)).toHaveText("Front", { timeout: 10_000 });
+        await page.getByRole("button", { name: /Close/ }).click();
+        await page.getByRole("button", { name: "Add" }).click();
+        await expect(editor.locator(".field-container").first()).toBeVisible({ timeout: 20_000 });
+        await expect(picker.getByRole("radio", { name: "Basic", exact: true })).toHaveAttribute(
+            "aria-checked",
+            "true",
+            { timeout: 10_000 },
+        );
 
         await picker.getByRole("radio", { name: "Fill in the blank" }).click();
         await expect(fieldLabel(editor, 0)).toHaveText("Text", { timeout: 10_000 });

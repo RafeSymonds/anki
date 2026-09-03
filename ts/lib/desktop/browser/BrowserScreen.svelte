@@ -958,11 +958,13 @@ actions with their Qt shortcuts (qt/aqt/browser/browser.py).
 <style>
     .browser {
         display: grid;
-        grid-template-columns: 220px minmax(0, 1fr);
+        grid-template-columns: 232px minmax(0, 1fr);
         height: 100%;
         min-height: 0;
         position: relative;
-        background: var(--canvas);
+        background: var(--app-ground);
+        gap: 12px;
+        padding: 0 16px 16px;
     }
     .browser.no-sidebar {
         grid-template-columns: minmax(0, 1fr);
@@ -973,43 +975,51 @@ actions with their Qt shortcuts (qt/aqt/browser/browser.py).
         min-width: 0;
         min-height: 0;
         position: relative;
+        background: var(--app-surface);
+        border-radius: var(--app-radius-large);
+        box-shadow: var(--app-shadow-card);
+        overflow: hidden;
     }
     .toolbar {
         display: flex;
         align-items: center;
         gap: 8px;
-        padding: 6px 10px;
-        border-bottom: 1px solid var(--border);
-        background: var(--canvas-elevated);
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--app-line);
     }
     .mode {
         display: flex;
-        border: 1px solid var(--border);
-        border-radius: var(--border-radius);
-        overflow: hidden;
+        gap: 2px;
+        background: var(--app-surface-sunken);
+        border-radius: var(--app-radius);
+        padding: 2px;
         flex: none;
     }
     .mode button {
         font: inherit;
-        color: var(--fg);
-        background: var(--button-bg);
+        font-size: 13px;
+        color: var(--fg-subtle);
+        background: transparent;
         border: 0;
-        padding: 3px 10px;
+        border-radius: var(--app-radius-small);
+        padding: 5px 12px;
         cursor: pointer;
     }
     .mode button.active {
-        background: var(--highlight-bg);
-        color: var(--highlight-fg);
+        background: var(--app-surface);
+        color: var(--fg);
+        font-weight: 600;
+        box-shadow: var(--app-shadow-card);
     }
     .search {
         flex: 1;
         min-width: 120px;
         font: inherit;
         color: var(--fg);
-        background: var(--canvas-inset);
-        border: 1px solid var(--border);
-        border-radius: var(--border-radius);
-        padding: 3px 8px;
+        background: var(--app-surface-sunken);
+        border: 1px solid transparent;
+        border-radius: var(--app-radius);
+        padding: 6px 10px;
     }
     .search:focus {
         outline: none;
@@ -1020,23 +1030,24 @@ actions with their Qt shortcuts (qt/aqt/browser/browser.py).
     }
     .tool {
         font: inherit;
-        color: var(--fg);
-        background: var(--button-bg);
-        border: 1px solid var(--border);
-        border-radius: var(--border-radius);
-        padding: 3px 10px;
+        font-size: 13px;
+        color: var(--fg-subtle);
+        background: var(--app-surface-sunken);
+        border: 1px solid transparent;
+        border-radius: var(--app-radius);
+        padding: 6px 10px;
         cursor: pointer;
         white-space: nowrap;
     }
     .tool:hover {
-        border-color: var(--button-hover-border);
+        border-color: var(--app-accent);
+        color: var(--app-accent);
     }
     .status {
-        padding: 2px 10px;
+        padding: 4px 12px;
         font-size: 12px;
         color: var(--fg-subtle);
-        border-bottom: 1px solid var(--border);
-        background: var(--canvas-elevated);
+        border-bottom: 1px solid var(--app-line);
     }
     .status.busy {
         opacity: 0.6;
@@ -1058,13 +1069,13 @@ actions with their Qt shortcuts (qt/aqt/browser/browser.py).
         display: flex;
         flex-direction: column;
         min-height: 0;
-        border-inline-start: 1px solid var(--border);
-        background: var(--canvas);
+        border-inline-start: 1px solid var(--app-line);
+        background: var(--app-surface);
     }
     .preview-pane {
         flex: 1;
         min-height: 160px;
-        border-bottom: 1px solid var(--border);
+        border-bottom: 1px solid var(--app-line);
     }
     .editor-pane {
         flex: 1.4;

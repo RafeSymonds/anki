@@ -57,6 +57,7 @@ makes through FrontendService.
         notetypeKindOptions,
     } from "./notetype-kinds";
     import { onRpcDone } from "./rpc-events";
+    import { applyEditorStylesToFrame } from "./editor-theme";
     import { applyDesktopThemeToFrame } from "./theme";
 
     export let mode: "add" | "current" | "browser" = "add";
@@ -103,6 +104,20 @@ makes through FrontendService.
 
     function refreshCurrentNotetype(): void {
         currentNotetype = getNoteInfo()?.notetypeId ?? null;
+    }
+
+    /** The editor reports its state once it has a note, which can be after
+     * the panel is up; look again a few times so the kind picker starts on
+     * the type the editor is actually showing. */
+    function pollCurrentNotetype(): void {
+        let tries = 0;
+        const look = (): void => {
+            refreshCurrentNotetype();
+            if (currentNotetype === null && ++tries < 8) {
+                setTimeout(look, 150);
+            }
+        };
+        look();
     }
 
     // Live preview of the card being typed (remembered per profile).
@@ -177,6 +192,7 @@ makes through FrontendService.
                 void load();
                 if (mode === "add") {
                     void loadKinds();
+                    pollCurrentNotetype();
                     void settingsGet("profile", PREVIEW_KEY)
                         .then((stored) => {
                             previewOpen = stored === true;
@@ -223,6 +239,7 @@ makes through FrontendService.
 
     function onLoad(): void {
         applyDesktopThemeToFrame(frame);
+        applyEditorStylesToFrame(frame);
         const w = win();
         if (w) {
             installBridgeHandler(w, (command) => onBridge(command));
@@ -336,7 +353,7 @@ makes through FrontendService.
     });
 </script>
 
-<div class="editor-panel">
+<div class="editor-panel" class:framed={mode === "add"}>
     {#if mode === "add" && kinds.length}
         <div class="kinds" role="radiogroup" aria-label="Kind of card">
             {#each kinds as option (option.kind)}
@@ -377,40 +394,55 @@ makes through FrontendService.
 </div>
 
 <style>
+    /* A segmented control: which kind of card this note will make. */
     .kinds {
         display: flex;
-        gap: 6px;
+        gap: 4px;
         align-items: center;
-        padding: 6px 10px;
-        border-bottom: 1px solid var(--border);
-        background: var(--canvas-elevated);
+        padding: 0 24px 12px;
+    }
+    .framed iframe,
+    .framed .body > :global(*) {
+        border-radius: var(--app-radius-large);
+        box-shadow: var(--app-shadow-card);
+        overflow: hidden;
     }
     .kinds button {
         font: inherit;
-        color: var(--fg);
-        background: var(--button-bg);
-        border: 1px solid var(--border);
-        border-radius: var(--border-radius);
-        padding: 4px 12px;
+        font-size: 13px;
+        color: var(--fg-subtle);
+        background: var(--app-surface);
+        border: 1px solid transparent;
+        border-radius: var(--app-radius);
+        padding: 7px 14px;
         cursor: pointer;
+        box-shadow: var(--app-shadow-card);
+        transition:
+            background var(--transition),
+            color var(--transition);
+    }
+    .kinds button:hover {
+        color: var(--fg);
     }
     .kinds button.active {
-        background: var(--button-primary-bg);
-        color: white;
-        border-color: transparent;
+        background: var(--app-accent);
+        color: var(--app-accent-fg);
+        font-weight: 600;
     }
     .kinds button.more {
         margin-inline-start: auto;
         background: transparent;
-        border-color: transparent;
-        color: var(--fg-subtle);
+        box-shadow: none;
     }
     .kinds button.more:hover {
-        color: var(--fg);
-        border-color: var(--border);
+        background: var(--app-surface);
     }
     .kinds button.preview-toggle {
         margin-inline-start: 0;
+    }
+    .kinds button.preview-toggle.active {
+        background: var(--app-accent-soft);
+        color: var(--app-accent);
     }
     .editor-panel {
         display: flex;
@@ -423,6 +455,12 @@ makes through FrontendService.
         min-height: 0;
         display: grid;
         grid-template-columns: minmax(0, 1fr);
+        gap: 16px;
+    }
+    /* The add screen floats the editor on the window ground; the reviewer
+     * and browser embed it in a pane that already has its own frame. */
+    .framed .body {
+        padding: 0 24px 24px;
     }
     .body.split {
         grid-template-columns: minmax(0, 1fr) minmax(280px, 38%);
@@ -432,6 +470,6 @@ makes through FrontendService.
         width: 100%;
         height: 100%;
         border: 0;
-        background: var(--canvas);
+        background: var(--app-surface);
     }
 </style>

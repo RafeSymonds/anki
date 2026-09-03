@@ -26,7 +26,7 @@ the column list, a right-click on a row asks the screen for the actions menu.
     import { clickRow } from "./selection";
 
     export let controller: BrowserController;
-    export let rowHeight = 26;
+    export let rowHeight = 30;
 
     const dispatch = createEventDispatcher<{ contextmenu: { x: number; y: number } }>();
 
@@ -322,7 +322,7 @@ the column list, a right-click on a row asks the screen for the actions menu.
         height: 100%;
         min-height: 0;
         overflow: auto;
-        background: var(--canvas-elevated);
+        background: var(--app-surface);
         outline: none;
         font-size: 13px;
         user-select: none;
@@ -337,27 +337,29 @@ the column list, a right-click on a row asks the screen for the actions menu.
         display: grid;
         min-width: 100%;
         width: max-content;
-        background: var(--canvas);
-        border-bottom: 1px solid var(--border);
+        background: var(--app-surface);
+        border-bottom: 1px solid var(--app-line);
     }
     .head {
         display: flex;
         align-items: center;
         gap: 4px;
         min-width: 0;
-        padding: 0 8px;
+        padding: 0 10px;
         font: inherit;
+        font-size: 11px;
         font-weight: 600;
-        color: var(--fg);
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--fg-subtle);
         background: transparent;
         border: 0;
-        border-inline-end: 1px solid var(--border-subtle);
         text-align: start;
         cursor: pointer;
         overflow: hidden;
     }
     .head:hover {
-        background: var(--canvas-inset);
+        color: var(--fg);
     }
     .head .label {
         overflow: hidden;
@@ -411,7 +413,7 @@ the column list, a right-click on a row asks the screen for the actions menu.
         cursor: default;
     }
     .row[style*="--row-color"] {
-        background: color-mix(in srgb, var(--row-color) 35%, var(--canvas-elevated));
+        background: color-mix(in srgb, var(--row-color) 35%, var(--app-surface));
     }
     .row:hover {
         filter: brightness(0.96);
@@ -424,14 +426,14 @@ the column list, a right-click on a row asks the screen for the actions menu.
         background: color-mix(in srgb, var(--row-color) 45%, var(--selected-bg));
     }
     .row.current {
-        box-shadow: inset 0 0 0 1px var(--border-strong);
+        box-shadow: inset 0 0 0 1px var(--app-accent);
     }
     .row.disabled {
         color: var(--fg-disabled);
     }
     .cell {
         min-width: 0;
-        padding: 0 8px;
+        padding: 0 10px;
         overflow: hidden;
         white-space: nowrap;
         text-overflow: ellipsis;
