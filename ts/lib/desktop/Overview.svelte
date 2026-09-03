@@ -250,7 +250,11 @@ more cards and to the settings that decide how much comes back tomorrow.
 
         {#if finished && info}
             <div class="card congrats">
-                <CongratsPage {info} refreshPeriodically={true} />
+                <CongratsPage
+                    {info}
+                    refreshPeriodically={true}
+                    showCustomStudy={false}
+                />
                 {#each notices as notice (notice.kind)}
                     <div class="limit-notice">
                         <p>{noticeText(notice)}</p>

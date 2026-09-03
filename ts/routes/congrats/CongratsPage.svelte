@@ -16,6 +16,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     export let info: CongratsInfoResponse;
     export let refreshPeriodically = true;
+    /** The desktop shell offers Custom Study as a button of its own right
+     * below this panel, so it hides the sentence about it. */
+    export let showCustomStudy = true;
 
     const congrats = tr.schedulingCongratulationsFinished();
     let nextLearnMsg: string;
@@ -65,7 +68,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                     </p>
                 {/if}
 
-                {#if !info.isFilteredDeck}
+                {#if !info.isFilteredDeck && showCustomStudy}
                     <p>
                         {@html customStudyMsg}
                     </p>
