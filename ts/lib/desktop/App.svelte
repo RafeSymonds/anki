@@ -216,6 +216,8 @@ active.
     function onNotetypeSaved(): void {
         showToast(tr.cardTemplatesChangesSaved());
         notetypesVersion += 1;
+    }
+
     // Browser (ts/lib/desktop/browser): opened from the titlebar, "B", or a
     // page's searchInBrowser call.
     function openBrowser(search: string | null = null): void {

@@ -66,11 +66,7 @@ fields, OK and Cancel.
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="backdrop" on:click|self={() => dispatch("cancel")} on:keydown={onKeydown}>
-    <form
-        class="dialog"
-        aria-label={title}
-        on:submit|preventDefault={submit}
-    >
+    <form class="dialog" aria-label={title} on:submit|preventDefault={submit}>
         <div class="title">{title}</div>
         {#each fields as field, i (field.key)}
             <label class="field" class:inline={field.kind === "checkbox"}>

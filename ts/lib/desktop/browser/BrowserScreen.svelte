@@ -30,7 +30,11 @@ actions with their Qt shortcuts (qt/aqt/browser/browser.py).
     export let initialSearch: string | null = null;
     export let nightMode = false;
 
-    const dispatch = createEventDispatcher<{ close: void; undone: string | null; notify: string }>();
+    const dispatch = createEventDispatcher<{
+        close: void;
+        undone: string | null;
+        notify: string;
+    }>();
 
     const controller = new BrowserController();
     const items = controller.items;
@@ -84,7 +88,11 @@ actions with their Qt shortcuts (qt/aqt/browser/browser.py).
     let showPreview = false;
     let showCardInfo = false;
     let changeNotetype: { notetypeId: bigint; noteIds: bigint[] } | null = null;
-    let menu: { kind: "notes" | "cards" | "flags" | "context"; x: number; y: number } | null = null;
+    let menu: {
+        kind: "notes" | "cards" | "flags" | "context";
+        x: number;
+        y: number;
+    } | null = null;
     let dialog: Dialog | null = null;
     /** What the editor shows; follows the single selection once the editor saved. */
     let editorNote: Note | null = null;
@@ -107,7 +115,10 @@ actions with their Qt shortcuts (qt/aqt/browser/browser.py).
     $: void followSelection($singleNote, $singleCard);
 
     /** Show the selected note in the editor, saving the previous one first (`ensure_editor_saved`). */
-    async function followSelection(note: Note | null, card: Card | null): Promise<void> {
+    async function followSelection(
+        note: Note | null,
+        card: Card | null,
+    ): Promise<void> {
         const sequence = ++editorSequence;
         if (editorNote && note?.id !== editorNote.id) {
             await editor?.saveNow();
@@ -119,7 +130,11 @@ actions with their Qt shortcuts (qt/aqt/browser/browser.py).
         editorCard = card;
     }
 
-    function askDialog(title: string, fields: DialogField[], okLabel = "OK"): Promise<DialogValues | null> {
+    function askDialog(
+        title: string,
+        fields: DialogField[],
+        okLabel = "OK",
+    ): Promise<DialogValues | null> {
         return new Promise((resolve) => {
             dialog = { title, fields, okLabel, resolve };
         });
@@ -151,7 +166,9 @@ actions with their Qt shortcuts (qt/aqt/browser/browser.py).
             return;
         }
         const decks = await controller.deckNames();
-        const current = $currentCard ? currentDeckId($currentCard) : decks[0]?.id ?? 1n;
+        const current = $currentCard
+            ? currentDeckId($currentCard)
+            : (decks[0]?.id ?? 1n);
         const values = await askDialog(
             tr.browsingChangeDeck(),
             [
@@ -160,7 +177,10 @@ actions with their Qt shortcuts (qt/aqt/browser/browser.py).
                     label: tr.browsingMoveCardsToDeck(),
                     kind: "select",
                     value: current.toString(),
-                    options: decks.map((d) => ({ value: d.id.toString(), label: d.name })),
+                    options: decks.map((d) => ({
+                        value: d.id.toString(),
+                        label: d.name,
+                    })),
                 },
             ],
             tr.browsingMoveCards(),
@@ -205,8 +225,15 @@ actions with their Qt shortcuts (qt/aqt/browser/browser.py).
     /** One text field. A dialog rather than window.prompt: the prompt blocks
      * scripts, so the editor's blur-save would only run after it closed and
      * race the operation. */
-    async function askText(title: string, label: string, value = "", hint?: string): Promise<string | null> {
-        const values = await askDialog(title, [{ key: "text", label, kind: "text", value, hint }]);
+    async function askText(
+        title: string,
+        label: string,
+        value = "",
+        hint?: string,
+    ): Promise<string | null> {
+        const values = await askDialog(title, [
+            { key: "text", label, kind: "text", value, hint },
+        ]);
         const text = values ? String(values.text).trim() : "";
         return text || null;
     }
@@ -221,7 +248,10 @@ actions with their Qt shortcuts (qt/aqt/browser/browser.py).
 
     async function removeTags(): Promise<void> {
         await saveEditor();
-        const tags = await askText(tr.browsingRemoveTags(), tr.browsingEnterTagsToDelete());
+        const tags = await askText(
+            tr.browsingRemoveTags(),
+            tr.browsingEnterTagsToDelete(),
+        );
         if (tags) {
             await controller.removeTagsFromSelected(tags);
         }
@@ -254,7 +284,12 @@ actions with their Qt shortcuts (qt/aqt/browser/browser.py).
                 kind: "checkbox",
                 value: defaults.restorePosition,
             },
-            { key: "resetCounts", label: tr.schedulingResetCounts(), kind: "checkbox", value: defaults.resetCounts },
+            {
+                key: "resetCounts",
+                label: tr.schedulingResetCounts(),
+                kind: "checkbox",
+                value: defaults.resetCounts,
+            },
         ]);
         if (values) {
             await controller.forgetSelected({
@@ -268,9 +303,24 @@ actions with their Qt shortcuts (qt/aqt/browser/browser.py).
         await saveEditor();
         const defaults = await controller.repositionDefaults();
         const values = await askDialog(tr.browsingRepositionNewCards(), [
-            { key: "start", label: tr.browsingStartPosition(), kind: "number", value: defaults.start },
-            { key: "step", label: tr.browsingStep(), kind: "number", value: defaults.step },
-            { key: "randomize", label: tr.browsingRandomizeOrder(), kind: "checkbox", value: defaults.randomize },
+            {
+                key: "start",
+                label: tr.browsingStartPosition(),
+                kind: "number",
+                value: defaults.start,
+            },
+            {
+                key: "step",
+                label: tr.browsingStep(),
+                kind: "number",
+                value: defaults.step,
+            },
+            {
+                key: "randomize",
+                label: tr.browsingRandomizeOrder(),
+                kind: "checkbox",
+                value: defaults.randomize,
+            },
             {
                 key: "shift",
                 label: tr.browsingShiftPositionOfExistingCards(),
@@ -294,7 +344,12 @@ actions with their Qt shortcuts (qt/aqt/browser/browser.py).
         const hasSelection = controller.selectionCount() > 0;
         const values = await askDialog(tr.browsingFindAndReplace(), [
             { key: "search", label: tr.browsingFind(), kind: "text", value: "" },
-            { key: "replacement", label: tr.browsingReplaceWith(), kind: "text", value: "" },
+            {
+                key: "replacement",
+                label: tr.browsingReplaceWith(),
+                kind: "text",
+                value: "",
+            },
             {
                 key: "field",
                 label: tr.browsingIn(),
@@ -312,8 +367,18 @@ actions with their Qt shortcuts (qt/aqt/browser/browser.py).
                 kind: "checkbox",
                 value: hasSelection,
             },
-            { key: "regex", label: tr.browsingTreatInputAsRegularExpression(), kind: "checkbox", value: false },
-            { key: "ignoreCase", label: tr.browsingIgnoreCase(), kind: "checkbox", value: true },
+            {
+                key: "regex",
+                label: tr.browsingTreatInputAsRegularExpression(),
+                kind: "checkbox",
+                value: false,
+            },
+            {
+                key: "ignoreCase",
+                label: tr.browsingIgnoreCase(),
+                kind: "checkbox",
+                value: true,
+            },
         ]);
         if (values) {
             await controller.findAndReplace({
@@ -460,7 +525,12 @@ actions with their Qt shortcuts (qt/aqt/browser/browser.py).
                 controller.moveTo($items.length - 1, extend);
                 return true;
         }
-        if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "a") {
+        if (
+            (event.ctrlKey || event.metaKey) &&
+            !event.altKey &&
+            !event.shiftKey &&
+            event.key.toLowerCase() === "a"
+        ) {
             controller.selectAll();
             return true;
         }
@@ -522,27 +592,74 @@ actions with their Qt shortcuts (qt/aqt/browser/browser.py).
     ////////////////////////////////////////////////////////////////////////
 
     $: notesMenu = [
-        { label: tr.browsingAddTags2(), shortcut: "Ctrl+Shift+A", action: () => void addTags() },
-        { label: tr.browsingRemoveTags(), shortcut: "Ctrl+Alt+Shift+A", action: () => void removeTags() },
-        { label: tr.browsingToggleMark(), shortcut: "Ctrl+K", action: () => void toggleMark(), checked: marked },
+        {
+            label: tr.browsingAddTags2(),
+            shortcut: "Ctrl+Shift+A",
+            action: () => void addTags(),
+        },
+        {
+            label: tr.browsingRemoveTags(),
+            shortcut: "Ctrl+Alt+Shift+A",
+            action: () => void removeTags(),
+        },
+        {
+            label: tr.browsingToggleMark(),
+            shortcut: "Ctrl+K",
+            action: () => void toggleMark(),
+            checked: marked,
+        },
         {
             label: tr.browsingChangeNotetype(),
             shortcut: "Ctrl+Shift+M",
             action: () => void openChangeNotetype(),
         },
-        { label: tr.browsingFindAndReplace(), shortcut: "Ctrl+Alt+F", action: () => void findReplace() },
+        {
+            label: tr.browsingFindAndReplace(),
+            shortcut: "Ctrl+Alt+F",
+            action: () => void findReplace(),
+        },
         { label: "", divider: true },
-        { label: tr.browsingDeleteNotes(), shortcut: "Ctrl+Delete", action: () => void deleteNotes() },
+        {
+            label: tr.browsingDeleteNotes(),
+            shortcut: "Ctrl+Delete",
+            action: () => void deleteNotes(),
+        },
     ] as MenuItem[];
 
     $: cardsMenu = [
-        { label: tr.browsingChangeDeck(), shortcut: "Ctrl+D", action: () => void changeDeck() },
-        { label: tr.actionsCardInfo(), shortcut: "Ctrl+Shift+I", action: toggleCardInfo, checked: showCardInfo },
-        { label: tr.actionsPreview(), shortcut: "Ctrl+Shift+P", action: togglePreview, checked: showPreview },
+        {
+            label: tr.browsingChangeDeck(),
+            shortcut: "Ctrl+D",
+            action: () => void changeDeck(),
+        },
+        {
+            label: tr.actionsCardInfo(),
+            shortcut: "Ctrl+Shift+I",
+            action: toggleCardInfo,
+            checked: showCardInfo,
+        },
+        {
+            label: tr.actionsPreview(),
+            shortcut: "Ctrl+Shift+P",
+            action: togglePreview,
+            checked: showPreview,
+        },
         { label: "", divider: true },
-        { label: tr.actionsReposition(), shortcut: "Ctrl+Shift+S", action: () => void reposition() },
-        { label: tr.actionsSetDueDate(), shortcut: "Ctrl+Shift+D", action: () => void setDueDate() },
-        { label: tr.actionsForgetCard(), shortcut: "Ctrl+Alt+N", action: () => void forget() },
+        {
+            label: tr.actionsReposition(),
+            shortcut: "Ctrl+Shift+S",
+            action: () => void reposition(),
+        },
+        {
+            label: tr.actionsSetDueDate(),
+            shortcut: "Ctrl+Shift+D",
+            action: () => void setDueDate(),
+        },
+        {
+            label: tr.actionsForgetCard(),
+            shortcut: "Ctrl+Alt+N",
+            action: () => void forget(),
+        },
         { label: "", divider: true },
         {
             label: tr.browsingToggleSuspend(),
@@ -550,7 +667,12 @@ actions with their Qt shortcuts (qt/aqt/browser/browser.py).
             action: () => void toggleSuspend(),
             checked: suspended,
         },
-        { label: tr.browsingToggleBury(), shortcut: "Ctrl+Shift+J", action: () => void toggleBury(), checked: buried },
+        {
+            label: tr.browsingToggleBury(),
+            shortcut: "Ctrl+Shift+J",
+            action: () => void toggleBury(),
+            checked: buried,
+        },
     ] as MenuItem[];
 
     $: flagsMenu = FLAG_LABELS.map((label, i): MenuItem => ({
@@ -636,7 +758,9 @@ actions with their Qt shortcuts (qt/aqt/browser/browser.py).
             bind:this={sidebar}
             items={$sidebarItems}
             on:search={(e) => {
-                void saveEditor().then(() => controller.sidebarSearch(e.detail.item, e.detail.mods));
+                void saveEditor().then(() =>
+                    controller.sidebarSearch(e.detail.item, e.detail.mods),
+                );
             }}
         />
     {/if}
@@ -644,10 +768,16 @@ actions with their Qt shortcuts (qt/aqt/browser/browser.py).
     <div class="main">
         <div class="toolbar">
             <div class="mode" title={tr.browsingToggleShowingCardsNotes()}>
-                <button class:active={!$notesMode} on:click={() => $notesMode && controller.toggleMode()}>
+                <button
+                    class:active={!$notesMode}
+                    on:click={() => $notesMode && controller.toggleMode()}
+                >
                     {tr.browsingCards()}
                 </button>
-                <button class:active={$notesMode} on:click={() => !$notesMode && controller.toggleMode()}>
+                <button
+                    class:active={$notesMode}
+                    on:click={() => !$notesMode && controller.toggleMode()}
+                >
                     {tr.browsingNotes()}
                 </button>
             </div>
@@ -670,11 +800,19 @@ actions with their Qt shortcuts (qt/aqt/browser/browser.py).
                     <option value={entry}></option>
                 {/each}
             </datalist>
-            <button class="tool" on:click={() => void runSearch()}>{tr.actionsSearch()}</button>
+            <button class="tool" on:click={() => void runSearch()}>
+                {tr.actionsSearch()}
+            </button>
             <span class="spacer"></span>
-            <button class="tool" on:click={(e) => openMenu("notes", e)}>{tr.browsingNotes()} ▾</button>
-            <button class="tool" on:click={(e) => openMenu("cards", e)}>{tr.browsingCards()} ▾</button>
-            <button class="tool" on:click={(e) => openMenu("flags", e)}>{tr.actionsSetFlag()} ▾</button>
+            <button class="tool" on:click={(e) => openMenu("notes", e)}>
+                {tr.browsingNotes()} ▾
+            </button>
+            <button class="tool" on:click={(e) => openMenu("cards", e)}>
+                {tr.browsingCards()} ▾
+            </button>
+            <button class="tool" on:click={(e) => openMenu("flags", e)}>
+                {tr.actionsSetFlag()} ▾
+            </button>
         </div>
 
         <div class="status" class:busy={$searching}>{title}</div>
@@ -684,7 +822,8 @@ actions with their Qt shortcuts (qt/aqt/browser/browser.py).
                 <BrowserTable
                     bind:this={table}
                     {controller}
-                    on:contextmenu={(e) => (menu = { kind: "context", x: e.detail.x, y: e.detail.y })}
+                    on:contextmenu={(e) =>
+                        (menu = { kind: "context", x: e.detail.x, y: e.detail.y })}
                 />
             </div>
             {#if editorNote || showPreview}
@@ -720,7 +859,11 @@ actions with their Qt shortcuts (qt/aqt/browser/browser.py).
 
         {#if showCardInfo}
             <div class="overlay">
-                <CardInfoPanel cardId={$currentCard?.id ?? null} {nightMode} on:close={() => (showCardInfo = false)} />
+                <CardInfoPanel
+                    cardId={$currentCard?.id ?? null}
+                    {nightMode}
+                    on:close={() => (showCardInfo = false)}
+                />
             </div>
         {/if}
         {#if changeNotetype}
@@ -738,16 +881,26 @@ actions with their Qt shortcuts (qt/aqt/browser/browser.py).
 
     {#if menu}
         <!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
-        <div class="menu-backdrop" on:click={() => (menu = null)} on:contextmenu|preventDefault={() => (menu = null)}>
+        <div
+            class="menu-backdrop"
+            on:click={() => (menu = null)}
+            on:contextmenu|preventDefault={() => (menu = null)}
+        >
             <div class="menu" role="menu" style="left: {menu.x}px; top: {menu.y}px">
                 {#each menuItems(menu.kind) as item, i (i)}
                     {#if item.divider}
                         <div class="divider"></div>
                     {:else}
-                        <button role="menuitem" on:click|stopPropagation={() => runMenuItem(item)}>
+                        <button
+                            role="menuitem"
+                            on:click|stopPropagation={() => runMenuItem(item)}
+                        >
                             <span class="check">{item.checked ? "✓" : ""}</span>
                             {#if item.color}
-                                <span class="flag-dot" style="background: var({item.color})"></span>
+                                <span
+                                    class="flag-dot"
+                                    style="background: var({item.color})"
+                                ></span>
                             {/if}
                             <span class="label">{item.label}</span>
                             {#if item.shortcut}

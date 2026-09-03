@@ -38,7 +38,10 @@ ors with it, Alt negates it, as in qt/aqt/browser/sidebar/tree.py.
         collapsed = next;
     }
 
-    type ModifierEvent = Pick<MouseEvent, "ctrlKey" | "metaKey" | "shiftKey" | "altKey">;
+    type ModifierEvent = Pick<
+        MouseEvent,
+        "ctrlKey" | "metaKey" | "shiftKey" | "altKey"
+    >;
 
     function onClick(item: SidebarItem, event: ModifierEvent): void {
         if (!item.node) {
