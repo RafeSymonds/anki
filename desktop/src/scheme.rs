@@ -180,7 +180,7 @@ pub fn dispatch(state: &AppState, method: &Method, path: &str, body: &[u8]) -> R
             StatusCode::NOT_IMPLEMENTED,
             format!("frontend method '{name}' must be handled by the app shell"),
         ),
-        Route::Desktop(cmd) => desktop_api::handle(&cmd, body),
+        Route::Desktop(cmd) => desktop_api::handle(state, &cmd, body),
         Route::File(file) => serve_file(&file),
         Route::Index => serve_index(state),
         Route::Media(name) => serve_media(state, &name),
@@ -262,7 +262,14 @@ pub fn init_script() -> String {
                 return new Response(String((err && err.message) || err), {{ status: 500 }});
             }}
         }}
-        return origFetch(input, init);
+        const response = await origFetch(input, init);
+        // Let the shell know a backend operation ran, like Qt's
+        // operation_did_execute hook; used to refresh other views.
+        if (m && method.toUpperCase() === "POST" && response.ok) {{
+            const done = window.top && window.top.__ankiRpcDone;
+            if (done) {{ try {{ done(m[1], window); }} catch (_) {{}} }}
+        }}
+        return response;
     }};
     window.bridgeCommand = function (command, callback) {{
         const handler = window.__ankiBridgeHandler;
@@ -469,6 +476,7 @@ mod tests {
         assert!(script.contains("\"getSchedulingStatesWithContext\""));
         assert!(script.contains("window.bridgeCommand = function"));
         assert!(script.contains("__ankiFrontendService"));
+        assert!(script.contains("__ankiRpcDone"));
     }
 
     #[test]

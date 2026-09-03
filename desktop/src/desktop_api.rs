@@ -1,26 +1,100 @@
 //! Native actions the app shell asks the host for, posted to
 //! `/_desktop/{command}`. These are the pieces of FrontendService that need
-//! the operating system rather than rslib: opening links, file pickers,
-//! clipboard, audio. Only what the shell already uses is implemented.
+//! the operating system rather than rslib: opening links and files, native
+//! dialogs, and the shell's own settings store.
 
+use std::path::PathBuf;
+use std::sync::mpsc;
+
+use serde::Deserialize;
+use serde::Serialize;
+use serde_json::Value;
 use tauri::http::StatusCode;
 
 use crate::scheme::text;
 use crate::scheme::Reply;
+use crate::settings::Scope;
+use crate::AppState;
 
-pub fn handle(cmd: &str, body: &[u8]) -> Reply {
+#[derive(Debug, Deserialize)]
+struct SettingsGet {
+    scope: Scope,
+    key: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct SettingsSet {
+    scope: Scope,
+    key: String,
+    #[serde(default)]
+    value: Value,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct FilePick {
+    #[serde(default)]
+    title: String,
+    #[serde(default)]
+    filter_description: String,
+    #[serde(default)]
+    extensions: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct FilePicked {
+    path: String,
+}
+
+pub fn handle(state: &AppState, cmd: &str, body: &[u8]) -> Reply {
     match cmd {
         "openLink" => {
             let url = String::from_utf8_lossy(body);
-            match open_link(&url) {
-                Ok(()) => text(StatusCode::OK, String::new()),
-                Err(err) => text(StatusCode::BAD_REQUEST, err),
-            }
+            result(open_link(&url).map(|_| Value::Null))
+        }
+        "openMedia" | "showInMediaFolder" => {
+            let name = String::from_utf8_lossy(body);
+            result(open_media(state, &name, cmd == "showInMediaFolder").map(|_| Value::Null))
+        }
+        "settingsGet" => match serde_json::from_slice::<SettingsGet>(body) {
+            Ok(req) => json(state.settings.get(req.scope, &req.key)),
+            Err(err) => text(StatusCode::BAD_REQUEST, err.to_string()),
+        },
+        "settingsSet" => match serde_json::from_slice::<SettingsSet>(body) {
+            Ok(req) => result(
+                state
+                    .settings
+                    .set(req.scope, &req.key, req.value)
+                    .map(|_| Value::Null)
+                    .map_err(|e| e.to_string()),
+            ),
+            Err(err) => text(StatusCode::BAD_REQUEST, err.to_string()),
+        },
+        "openFilePicker" => {
+            let req: FilePick = serde_json::from_slice(body).unwrap_or_default();
+            let path = pick_file(state, &req)
+                .map(|p| p.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            json(serde_json::to_value(FilePicked { path }).expect("json"))
         }
         _ => text(
             StatusCode::NOT_FOUND,
             format!("unknown desktop command: {cmd}"),
         ),
+    }
+}
+
+fn json(value: Value) -> Reply {
+    tauri::http::Response::builder()
+        .status(StatusCode::OK)
+        .header(tauri::http::header::CONTENT_TYPE, "application/json")
+        .body(std::borrow::Cow::Owned(value.to_string().into_bytes()))
+        .expect("json response")
+}
+
+fn result(outcome: Result<Value, String>) -> Reply {
+    match outcome {
+        Ok(value) => json(value),
+        Err(err) => text(StatusCode::BAD_REQUEST, err),
     }
 }
 
@@ -42,6 +116,66 @@ pub fn link_is_allowed(url: &str) -> bool {
     lower.starts_with("https://") || lower.starts_with("http://") || lower.starts_with("mailto:")
 }
 
+/// Open a file from the media folder with its default app, or reveal it.
+fn open_media(state: &AppState, name: &str, reveal: bool) -> Result<(), String> {
+    if !crate::scheme::safe_media_path(name) {
+        return Err(format!("invalid media path: {name}"));
+    }
+    let dir = state.media_dir().ok_or("no collection open")?;
+    let path = dir.join(name);
+    let mut command = std::process::Command::new("open");
+    if reveal {
+        command.arg("-R");
+    }
+    command
+        .arg(&path)
+        .spawn()
+        .map(|_| ())
+        .map_err(|err| format!("open {}: {err}", path.display()))
+}
+
+/// Show a native open-file dialog. Runs on the main thread, which is where
+/// the scheme handler already is under Tauri; from the HTTP server the
+/// request is forwarded to the main thread when an app exists. Tests set
+/// `ANKI_TEST_FILE_PICK` to answer without a dialog.
+fn pick_file(state: &AppState, req: &FilePick) -> Option<PathBuf> {
+    if let Ok(path) = std::env::var("ANKI_TEST_FILE_PICK") {
+        return if path.is_empty() {
+            None
+        } else {
+            Some(PathBuf::from(path))
+        };
+    }
+    let title = req.title.clone();
+    let description = if req.filter_description.is_empty() {
+        "Files".to_string()
+    } else {
+        req.filter_description.clone()
+    };
+    let extensions: Vec<String> = req
+        .extensions
+        .iter()
+        .map(|e| e.trim_start_matches('.').to_string())
+        .collect();
+    let show = move || {
+        let mut dialog = rfd::FileDialog::new().set_title(&title);
+        if !extensions.is_empty() {
+            dialog = dialog.add_filter(&description, &extensions);
+        }
+        dialog.pick_file()
+    };
+    if state.on_main_thread() {
+        return show();
+    }
+    let app = state.app_handle()?;
+    let (tx, rx) = mpsc::channel();
+    app.run_on_main_thread(move || {
+        let _ = tx.send(show());
+    })
+    .ok()?;
+    rx.recv().ok().flatten()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -55,5 +189,19 @@ mod tests {
         assert!(!link_is_allowed("javascript:alert(1)"));
         assert!(!link_is_allowed("/usr/bin/say"));
         assert!(!link_is_allowed(""));
+    }
+
+    #[test]
+    fn settings_requests_parse() {
+        let get: SettingsGet =
+            serde_json::from_str(r#"{"scope":"profile","key":"syncUser"}"#).unwrap();
+        assert_eq!(get.scope, Scope::Profile);
+        assert_eq!(get.key, "syncUser");
+        let set: SettingsSet =
+            serde_json::from_str(r#"{"scope":"meta","key":"k","value":{"a":1}}"#).unwrap();
+        assert_eq!(set.scope, Scope::Meta);
+        assert_eq!(set.value["a"], 1);
+        let unset: SettingsSet = serde_json::from_str(r#"{"scope":"meta","key":"k"}"#).unwrap();
+        assert!(unset.value.is_null());
     }
 }

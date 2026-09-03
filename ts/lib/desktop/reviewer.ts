@@ -191,6 +191,8 @@ export class ReviewerController {
     readonly stopTimerOnAnswer: Writable<boolean> = writable(false);
     /** Short notices such as "card was a leech". */
     readonly notice: Writable<string | null> = writable(null);
+    /** The card being shown, for the edit panel. */
+    readonly currentCard: Writable<Card | null> = writable(null);
 
     card: Card | null = null;
     private note: Note | null = null;
@@ -256,7 +258,26 @@ export class ReviewerController {
         this.unregister = [];
         avPlayer.stop();
         this.card = null;
+        this.currentCard.set(null);
         this.state.set("idle");
+    }
+
+    /** Re-render the current card after its note was edited, keeping the
+     * side that is showing (`_redraw_current_card` in reviewer.py). */
+    async redrawCurrent(): Promise<void> {
+        const card = this.card;
+        if (!card || !this.running) {
+            return;
+        }
+        const wasAnswer = get(this.state) === "answer";
+        this.note = await getNote({ nid: card.noteId });
+        this.marked.set(this.note.tags.some((t) => t.toLowerCase() === MARKED_TAG));
+        await this.render();
+        if (wasAnswer) {
+            await this.presentAnswer();
+        } else {
+            await this.showQuestion();
+        }
     }
 
     /** Re-fetch the queue, e.g. after undo or an edit. */
@@ -295,6 +316,7 @@ export class ReviewerController {
         const queued = await getQueuedCards({ fetchLimit: 1, intradayLearningOnly: false });
         if (!queued.cards.length) {
             this.card = null;
+            this.currentCard.set(null);
             this.state.set("finished");
             this.onFinished?.();
             return;
@@ -312,6 +334,7 @@ export class ReviewerController {
             states.current.customData = card.customData;
         }
         this.card = card;
+        this.currentCard.set(card);
         this.states = states;
         this.context = top.context ?? null;
         this.timerStarted = Date.now();
@@ -446,16 +469,23 @@ export class ReviewerController {
     }
 
     async showAnswer(): Promise<void> {
-        const card = this.card;
-        const rendered = this.rendered;
-        if (!card || !rendered || !this.view || get(this.state) !== "question") {
+        if (get(this.state) !== "question" || !this.view) {
             return;
         }
         this.typedAnswer = this.view.getTypedAnswer();
         this.state.set("answer");
-        if (this.autoplay) {
-            avPlayer.playTags(rendered.answerTags);
+        if (this.autoplay && this.rendered) {
+            avPlayer.playTags(this.rendered.answerTags);
         }
+        await this.presentAnswer();
+    }
+
+    private async presentAnswer(): Promise<void> {
+        const rendered = this.rendered;
+        if (!this.card || !rendered || !this.view) {
+            return;
+        }
+        this.state.set("answer");
         let answer = await this.prepareText(rendered.answer);
         answer = await this.typeAnswerAnswer(answer);
         this.view.showAnswer(withStyle(rendered.css, answer));

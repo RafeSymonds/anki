@@ -11,7 +11,9 @@ Edit, Undo and the card actions menu.
     import { createEventDispatcher, onDestroy, onMount } from "svelte";
 
     import CardFrame from "./CardFrame.svelte";
+    import EditorPanel from "./EditorPanel.svelte";
     import type { Ease, ReviewerController } from "./reviewer";
+    import { onRpcDone } from "./rpc-events";
     import { isTypingTarget, ShortcutMap, shortcutLabel } from "./shortcuts";
 
     export let controller: ReviewerController;
@@ -19,7 +21,6 @@ Edit, Undo and the card actions menu.
 
     const dispatch = createEventDispatcher<{
         finished: void;
-        edit: void;
         options: void;
         undone: string | null;
     }>();
@@ -31,16 +32,20 @@ Edit, Undo and the card actions menu.
     const timerLimit = controller.timerLimitSecs;
     const stopTimerOnAnswer = controller.stopTimerOnAnswer;
     const notice = controller.notice;
+    const currentCard = controller.currentCard;
 
     let frame: CardFrame;
+    let editor: EditorPanel | undefined;
+    let editing = false;
     let menuOpen = false;
     let elapsed = 0;
     let ticker: ReturnType<typeof setInterval> | undefined;
+    let offRpcDone: (() => void) | undefined;
 
     const easeKeys: Record<Ease, string> = { 1: "1", 2: "2", 3: "3", 4: "4" };
 
     const shortcuts = new ShortcutMap().addAll([
-        ["e", () => dispatch("edit")],
+        ["e", () => toggleEditing()],
         [" ", () => void controller.onEnter()],
         ["Enter", () => void controller.onEnter()],
         ["m", () => (menuOpen = !menuOpen)],
@@ -69,6 +74,7 @@ Edit, Undo and the card actions menu.
         ["5", () => controller.pauseAudio()],
         ["6", () => controller.seekAudio(-5)],
         ["7", () => controller.seekAudio(5)],
+        ["Escape", () => void closeEditor()],
     ]);
 
     export function handleKey(event: KeyboardEvent): boolean {
@@ -81,6 +87,23 @@ Edit, Undo and the card actions menu.
             return true;
         }
         return false;
+    }
+
+    function toggleEditing(): void {
+        if (editing) {
+            void closeEditor();
+        } else if ($currentCard) {
+            editing = true;
+        }
+    }
+
+    async function closeEditor(): Promise<void> {
+        if (!editing) {
+            return;
+        }
+        await editor?.saveNow();
+        editing = false;
+        await controller.redrawCurrent();
     }
 
     async function undoLast(): Promise<void> {
@@ -114,6 +137,13 @@ Edit, Undo and the card actions menu.
         controller.attach(frame.view);
         controller.onFinished = () => dispatch("finished");
         void controller.start();
+        // The editor saves through updateNotes; redraw once that has landed,
+        // the way Qt's reviewer reacts to note_text changes.
+        offRpcDone = onRpcDone((method) => {
+            if (editing && method === "updateNotes") {
+                void controller.redrawCurrent();
+            }
+        });
         ticker = setInterval(() => {
             const stopped = $state === "answer" && $stopTimerOnAnswer;
             if (($state === "question" || $state === "answer") && !stopped) {
@@ -124,6 +154,7 @@ Edit, Undo and the card actions menu.
 
     onDestroy(() => {
         clearInterval(ticker);
+        offRpcDone?.();
         controller.onFinished = null;
         controller.stop();
     });
@@ -134,23 +165,42 @@ Edit, Undo and the card actions menu.
 </script>
 
 <div class="reviewer">
-    <div class="card-area">
-        <CardFrame
-            bind:this={frame}
-            {nightMode}
-            onCommand={(command) => controller.onBridgeCommand(command)}
-            onKeydown={(event) => handleKey(event)}
-        />
-        {#if $notice}
-            <div class="notice">{$notice}</div>
+    <div class="card-area" class:split={editing}>
+        <div class="card-pane">
+            <CardFrame
+                bind:this={frame}
+                {nightMode}
+                onCommand={(command) => controller.onBridgeCommand(command)}
+                onKeydown={(event) => handleKey(event)}
+            />
+            {#if $notice}
+                <div class="notice">{$notice}</div>
+            {/if}
+        </div>
+        {#if editing && $currentCard}
+            <div class="editor-pane">
+                <div class="editor-header">
+                    <span>{tr.editingEditCurrent()}</span>
+                    <button on:click={closeEditor}>{tr.actionsClose()}</button>
+                </div>
+                <EditorPanel
+                    bind:this={editor}
+                    mode="current"
+                    noteId={$currentCard.noteId}
+                    cardId={$currentCard.id}
+                    {nightMode}
+                    on:close={closeEditor}
+                />
+            </div>
         {/if}
     </div>
 
     <div class="bottom">
         <div class="left">
             <button
+                class:active={editing}
                 title={tr.actionsShortcutKey({ val: "E" })}
-                on:click={() => dispatch("edit")}
+                on:click={toggleEditing}
             >
                 {tr.studyingEdit()}
             </button>
@@ -324,9 +374,37 @@ Edit, Undo and the card actions menu.
         min-height: 0;
     }
     .card-area {
-        position: relative;
         flex: 1;
         min-height: 0;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .card-area.split {
+        grid-template-columns: minmax(0, 1fr) minmax(320px, 45%);
+    }
+    .card-pane {
+        position: relative;
+        min-height: 0;
+    }
+    .editor-pane {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        border-inline-start: 1px solid var(--border);
+        background: var(--canvas);
+    }
+    .editor-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 6px 10px;
+        border-bottom: 1px solid var(--border);
+        background: var(--canvas-elevated);
+        font-weight: 600;
+    }
+    button.active {
+        background: var(--highlight-bg);
+        color: var(--highlight-fg);
     }
     .notice {
         position: absolute;

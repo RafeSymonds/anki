@@ -3,7 +3,8 @@ Copyright: Ankitects Pty Ltd and contributors
 License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 The desktop app shell: deck list on the left, and on the right whichever of
-the overview, the study screen or an embedded page is active.
+the overview, the study screen, the add-note editor or an embedded page is
+active.
 -->
 <script lang="ts">
     import type { DeckTreeNode } from "@generated/anki/decks_pb";
@@ -23,21 +24,20 @@ the overview, the study screen or an embedded page is active.
         setCollapsed,
     } from "./decks";
     import DeckSidebar from "./DeckSidebar.svelte";
+    import EditorPanel from "./EditorPanel.svelte";
     import EmbeddedPage from "./EmbeddedPage.svelte";
-    import {
-        installFrontendService,
-        registerFrontendHandler,
-        typedHandler,
-    } from "./frontend-service";
-    import { Empty, String as PbString } from "@generated/anki/generic_pb";
+    import { installFrontendService } from "./frontend-service";
     import Overview from "./Overview.svelte";
     import Reviewer from "./Reviewer.svelte";
     import { ReviewerController } from "./reviewer";
+    import { installRpcDoneHook, isOperation, onRpcDone } from "./rpc-events";
+    import { installShellServices } from "./shell-services";
     import { isTypingTarget, ShortcutMap } from "./shortcuts";
 
     type Screen =
         | { kind: "overview" }
         | { kind: "review" }
+        | { kind: "add" }
         | { kind: "page"; title: string; src: string; onClose?: () => void };
 
     let tree: DeckTreeNode | null = null;
@@ -49,8 +49,10 @@ the overview, the study screen or an embedded page is active.
     let nightMode = false;
     let reviewer: Reviewer;
     let embedded: EmbeddedPage;
+    let addEditor: EditorPanel;
     let toast: string | null = null;
     let toastTimer: ReturnType<typeof setTimeout> | undefined;
+    let refreshTimer: ReturnType<typeof setTimeout> | undefined;
     const controller = new ReviewerController();
 
     const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
@@ -71,10 +73,18 @@ the overview, the study screen or an embedded page is active.
         overviewVersion += 1;
     }
 
+    /** Refresh the deck list shortly after a collection change from any frame. */
+    function scheduleRefresh(): void {
+        clearTimeout(refreshTimer);
+        refreshTimer = setTimeout(() => void refreshDecks(), 300);
+    }
+
     async function onSelectDeck(id: bigint): Promise<void> {
         await selectDeck(id);
         currentDeckId = id;
-        screen = { kind: "overview" };
+        if (screen.kind !== "add") {
+            screen = { kind: "overview" };
+        }
         await refreshDecks();
     }
 
@@ -104,10 +114,21 @@ the overview, the study screen or an embedded page is active.
         };
     }
 
+    function openAdd(): void {
+        if (screen.kind !== "add") {
+            screen = { kind: "add" };
+        }
+    }
+
     function closePage(): void {
         const onClose = screen.kind === "page" ? screen.onClose : undefined;
         screen = { kind: "overview" };
         onClose?.();
+    }
+
+    function closeAdd(): void {
+        screen = { kind: "overview" };
+        void refreshDecks();
     }
 
     async function onCreateDeck(): Promise<void> {
@@ -167,6 +188,7 @@ the overview, the study screen or an embedded page is active.
                 screen = { kind: "overview" };
             },
         ],
+        ["a", () => openAdd()],
         [
             "s",
             () => {
@@ -188,6 +210,8 @@ the overview, the study screen or an embedded page is active.
             () => {
                 if (screen.kind === "page") {
                     embedded?.requestClose();
+                } else if (screen.kind === "add") {
+                    void addEditor?.requestClose();
                 }
             },
         ],
@@ -205,19 +229,22 @@ the overview, the study screen or an embedded page is active.
         }
     }
 
-    async function openLink(url: string): Promise<void> {
-        await fetch("/_desktop/openLink", { method: "POST", body: url });
-    }
+    let uninstallServices: (() => void) | undefined;
+    let offRpcDone: (() => void) | undefined;
 
     onMount(async () => {
         installFrontendService();
-        registerFrontendHandler(
-            "openLink",
-            typedHandler(PbString, async (input) => {
-                await openLink(input.val);
-                return new Empty();
-            }),
-        );
+        installRpcDoneHook();
+        uninstallServices = installShellServices({
+            notify: showToast,
+            askUser: async (text) => confirm(text),
+            showMessage: async (text) => alert(text),
+        });
+        offRpcDone = onRpcDone((method) => {
+            if (isOperation(method)) {
+                scheduleRefresh();
+            }
+        });
         applyTheme();
         darkQuery.addEventListener("change", applyTheme);
         window.addEventListener("keydown", onKeydown);
@@ -226,7 +253,7 @@ the overview, the study screen or an embedded page is active.
             const href = anchor?.getAttribute("href") ?? "";
             if (/^https?:/i.test(href)) {
                 event.preventDefault();
-                void openLink(href);
+                void fetch("/_desktop/openLink", { method: "POST", body: href });
             }
         });
         currentDeckId = await fetchCurrentDeckId();
@@ -236,6 +263,8 @@ the overview, the study screen or an embedded page is active.
     onDestroy(() => {
         darkQuery.removeEventListener("change", applyTheme);
         window.removeEventListener("keydown", onKeydown);
+        uninstallServices?.();
+        offRpcDone?.();
     });
 </script>
 
@@ -259,6 +288,11 @@ the overview, the study screen or an embedded page is active.
                     ‹ {tr.actionsClose()}
                 </button>
                 <span class="title">{screen.title}</span>
+            {:else if screen.kind === "add"}
+                <button class="back" on:click={() => addEditor?.requestClose()}>
+                    ‹ {tr.actionsClose()}
+                </button>
+                <span class="title">{tr.actionsAdd()}</span>
             {:else if screen.kind === "review"}
                 <button class="back" on:click={onReviewFinished}>
                     ‹ {tr.actionsDecks()}
@@ -271,6 +305,16 @@ the overview, the study screen or an embedded page is active.
                     {rows.find((r) => r.id === currentDeckId)?.name ?? ""}
                 </span>
             {/if}
+            <span class="spacer"></span>
+            {#if screen.kind !== "add"}
+                <button
+                    class="tool"
+                    title={tr.actionsShortcutKey({ val: "A" })}
+                    on:click={openAdd}
+                >
+                    {tr.actionsAdd()}
+                </button>
+            {/if}
         </div>
 
         <div class="content">
@@ -282,6 +326,14 @@ the overview, the study screen or an embedded page is active.
                     on:finished={onReviewFinished}
                     on:options={() => openDeckOptions(currentDeckId)}
                     on:undone={(e) => onUndone(e.detail)}
+                />
+            {:else if screen.kind === "add"}
+                <EditorPanel
+                    bind:this={addEditor}
+                    mode="add"
+                    deckId={currentDeckId}
+                    {nightMode}
+                    on:close={closeAdd}
                 />
             {:else if screen.kind === "page"}
                 <EmbeddedPage
@@ -350,6 +402,9 @@ the overview, the study screen or an embedded page is active.
         overflow: hidden;
         text-overflow: ellipsis;
     }
+    .spacer {
+        flex: 1;
+    }
     .back {
         font: inherit;
         color: var(--fg-link);
@@ -357,6 +412,18 @@ the overview, the study screen or an embedded page is active.
         border: 0;
         padding: 2px 4px;
         cursor: pointer;
+    }
+    .tool {
+        font: inherit;
+        color: var(--fg);
+        background: var(--button-bg);
+        border: 1px solid var(--border);
+        border-radius: var(--border-radius);
+        padding: 3px 10px;
+        cursor: pointer;
+    }
+    .tool:hover {
+        border-color: var(--button-hover-border);
     }
     .content {
         flex: 1;

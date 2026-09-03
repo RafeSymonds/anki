@@ -13,16 +13,20 @@ pub mod http;
 pub mod profile;
 pub mod rpc;
 pub mod scheme;
+pub mod settings;
 
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::thread::ThreadId;
 
 use anki::backend::Backend;
 use anki_i18n::I18n;
 use anki_proto::decks::DeckTreeNode;
 use anki_proto::decks::DeckTreeRequest;
 pub use scheme::WebRoot;
+pub use settings::Settings;
+use tauri::AppHandle;
 use tauri::RunEvent;
 use tauri::TitleBarStyle;
 use tauri::WebviewUrl;
@@ -33,17 +37,38 @@ pub struct AppState {
     /// The rslib backend. One per process, the same way pylib holds one.
     pub backend: Backend,
     pub web: WebRoot,
+    /// Shell settings for the open profile.
+    pub settings: Settings,
     /// Media folder of the open collection, if any.
     media_dir: Mutex<Option<PathBuf>>,
+    /// Set once the Tauri app exists; absent in `--serve` mode.
+    app: Mutex<Option<AppHandle>>,
+    /// Native dialogs must run here.
+    main_thread: ThreadId,
 }
 
 impl AppState {
-    pub fn new(backend: Backend, web: WebRoot) -> Self {
+    pub fn new(backend: Backend, web: WebRoot, settings: Settings) -> Self {
         Self {
             backend,
             web,
+            settings,
             media_dir: Mutex::new(None),
+            app: Mutex::new(None),
+            main_thread: std::thread::current().id(),
         }
+    }
+
+    pub fn app_handle(&self) -> Option<AppHandle> {
+        self.app.lock().expect("app lock").clone()
+    }
+
+    pub fn set_app_handle(&self, app: AppHandle) {
+        *self.app.lock().expect("app lock") = Some(app);
+    }
+
+    pub fn on_main_thread(&self) -> bool {
+        std::thread::current().id() == self.main_thread
     }
 
     pub fn media_dir(&self) -> Option<PathBuf> {
@@ -118,7 +143,8 @@ pub fn open_state(options: &Options) -> AppState {
         }
     }
 
-    let state = AppState::new(backend, WebRoot::from_repo());
+    let settings = Settings::load(&profile_dir);
+    let state = AppState::new(backend, WebRoot::from_repo(), settings);
     state.set_media_dir(Some(
         profile::CollectionPaths::in_profile(&profile_dir).media_folder,
     ));
@@ -140,6 +166,7 @@ fn run_window(state: AppState) {
         .manage(state)
         .register_uri_scheme_protocol("anki", scheme::handle)
         .setup(|app| {
+            tauri::Manager::state::<AppState>(app).set_app_handle(app.handle().clone());
             let url = format!("anki://localhost{}", start_route());
             WebviewWindowBuilder::new(app, "main", WebviewUrl::CustomProtocol(url.parse()?))
                 .title("Anki")

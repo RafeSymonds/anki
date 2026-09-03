@@ -29,6 +29,7 @@ anki_proto.workspace = true
 anyhow.workspace = true
 dirs.workspace = true
 prost.workspace = true
+rfd.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tauri.workspace = true

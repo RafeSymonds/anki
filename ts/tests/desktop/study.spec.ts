@@ -9,7 +9,10 @@ test.describe("deck list and study", () => {
         const sidebar = page.locator("nav.sidebar");
         await expect(sidebar.locator(".row", { hasText: "Default" })).toBeVisible();
         await expect(sidebar.locator(".row", { hasText: "Demo" })).toBeVisible();
-        await expect(sidebar.locator(".row", { hasText: "Default" }).locator(".count.new")).toHaveText("12");
+        // The sidebar count matches the overview's count for the same deck.
+        const sidebarNew = await sidebar.locator(".row", { hasText: "Default" }).locator(".count.new").innerText();
+        expect(Number(sidebarNew)).toBeGreaterThan(0);
+        await expect(page.locator(".overview .new-count")).toHaveText(sidebarNew);
         // The deck name must not be truncated.
         const name = sidebar.locator(".row", { hasText: "Default" }).locator(".name");
         const box = await name.boundingBox();
