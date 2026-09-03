@@ -24,6 +24,7 @@ import {
     currentDeckId,
     questionTimeoutStep,
     ratingFromEase,
+    remainingText,
     stateForEase,
     timeboxReached,
     userFlag,
@@ -120,5 +121,17 @@ describe("auto advance", () => {
         expect(answerTimeoutStep(AnswerAction.ANSWER_GOOD)).toEqual({ kind: "answer", ease: 3 });
         expect(answerTimeoutStep(AnswerAction.SHOW_REMINDER)).toEqual({ kind: "reminder" });
         expect(answerTimeoutStep(undefined)).toEqual({ kind: "bury" });
+    });
+});
+
+describe("remaining indicator", () => {
+    it("adds up the three queues", () => {
+        expect(remainingText({ idx: 0, counts: [5, 3, 4] })).toBe("12 left");
+        expect(remainingText({ idx: 2, counts: [0, 0, 1] })).toBe("1 left");
+        expect(remainingText({ idx: 0, counts: [0, 0, 0] })).toBe("0 left");
+    });
+
+    it("is empty until the counts are known", () => {
+        expect(remainingText(null)).toBe("");
     });
 });

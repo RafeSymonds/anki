@@ -109,6 +109,7 @@ export function noteIdsNode(ids: bigint[]): SearchNode {
 
 export type SidebarKind =
     | "section"
+    | "savedSearch"
     | "today"
     | "state"
     | "flag"
@@ -302,15 +303,30 @@ export function notetypesSection(names: readonly NotetypeNameId[]): SidebarItem 
     });
 }
 
+/** The collection config key the Qt sidebar keeps saved searches under. */
+export const SAVED_SEARCHES_KEY = "savedFilters";
+export const SAVED_SEARCHES_ID = "saved";
+
+/** `_saved_searches_tree`: name -> search text, sorted by name. */
+export function savedSearchesSection(searches: Readonly<Record<string, string>>): SidebarItem {
+    const root = item(SAVED_SEARCHES_ID, tr.browsingSidebarSavedSearches(), "section", null);
+    root.children = Object.keys(searches)
+        .sort((a, b) => a.localeCompare(b))
+        .map((name) => item(`saved:${name}`, name, "savedSearch", textNode(searches[name])));
+    return root;
+}
+
 export interface SidebarInput {
     deckTree: DeckTreeNode;
     tagTree: TagTreeNode;
     notetypes: readonly NotetypeNameId[];
+    savedSearches?: Readonly<Record<string, string>>;
 }
 
-/** The sections in the order the Qt sidebar shows them (minus saved searches). */
+/** The sections in the order the Qt sidebar shows them. */
 export function buildSidebar(input: SidebarInput): SidebarItem[] {
     return [
+        savedSearchesSection(input.savedSearches ?? {}),
         todaySection(),
         cardStateSection(),
         flagsSection(),

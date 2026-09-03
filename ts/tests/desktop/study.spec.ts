@@ -42,6 +42,28 @@ test.describe("deck list and study", () => {
         expect((await card.innerText()).trim()).not.toBe(firstQuestion);
     });
 
+    test("shows how many cards are left and counts down when one graduates", async ({ page }) => {
+        await page.goto("/");
+        await page.locator("nav.sidebar .row", { hasText: "Default" }).click();
+        await page.getByRole("button", { name: "Study Now" }).click();
+        const remaining = page.locator(".reviewer .remaining");
+        await expect(remaining).toHaveText(/^\d+ left$/);
+        const before = Number((await remaining.innerText()).split(" ")[0]);
+        expect(before).toBeGreaterThan(1);
+
+        const showAnswer = page.locator("button.show-answer");
+        await expect(showAnswer).toBeVisible();
+        await showAnswer.click();
+        // Still shown on the answer side, and every button carries its interval.
+        await expect(remaining).toHaveText(`${before} left`);
+        for (const ease of [1, 2, 3, 4]) {
+            await expect(page.locator(`button.ease${ease} .interval`)).not.toHaveText("");
+        }
+        // Easy graduates a new card, so it is no longer due today.
+        await page.locator("button.ease4").click();
+        await expect(remaining).toHaveText(`${before - 1} left`);
+    });
+
     test("undo brings the answered card back", async ({ page }) => {
         await page.goto("/");
         await page.locator("nav.sidebar .row", { hasText: "Default" }).click();

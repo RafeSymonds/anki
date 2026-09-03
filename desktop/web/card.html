@@ -17,6 +17,10 @@ _showQuestion/_showAnswer functions Python calls.
     <link rel="stylesheet" type="text/css" href="/_anki/css/webview.css">
     <style>
         body { background-color: var(--canvas); }
+        /* A calmer surface than the Qt default (20px): more room around
+           the card, and a reading measure on wide windows. */
+        body { margin: 28px 40px; }
+        #qa { max-width: 1000px; margin: 0 auto; }
         html { font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif; }
         :root { --canvas: #ffffff; }
         :root[class*=night-mode] { --canvas: #2c2c2c; }

@@ -15,7 +15,7 @@ Edit, Undo and the card actions menu.
     import EditorPanel from "./EditorPanel.svelte";
     import { FIRST_CARD_GUIDE_KEY, guideNeeded } from "./first-card";
     import FirstCardOverlay from "./FirstCardOverlay.svelte";
-    import type { Ease, ReviewerController } from "./reviewer";
+    import { type Ease, remainingText, type ReviewerController } from "./reviewer";
     import { onRpcDone } from "./rpc-events";
     import { isTypingTarget, ShortcutMap, shortcutLabel } from "./shortcuts";
 
@@ -302,6 +302,14 @@ Edit, Undo and the card actions menu.
         </div>
 
         <div class="right">
+            {#if $counts}
+                <span
+                    class="remaining"
+                    title="New, learning and review cards still due today"
+                >
+                    {remainingText($counts)}
+                </span>
+            {/if}
             {#if $timerLimit}
                 <span class="timer" class:over={elapsed >= $timerLimit}>
                     {formatTime(elapsed)}
@@ -554,6 +562,11 @@ Edit, Undo and the card actions menu.
     }
     .ease.default {
         border-color: var(--border-strong);
+    }
+    .remaining {
+        color: var(--fg-subtle);
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
     }
     .timer {
         font-variant-numeric: tabular-nums;

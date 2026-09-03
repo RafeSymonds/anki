@@ -391,6 +391,38 @@ actions with their Qt shortcuts (qt/aqt/browser/browser.py).
         }
     }
 
+    // Saved searches (SidebarTreeView.save_current_search and friends)
+    async function saveCurrentSearch(): Promise<void> {
+        const search = controller.currentSearch();
+        const name = prompt(tr.browsingPleaseGiveYourFilterAName())?.trim();
+        if (!name) {
+            return;
+        }
+        if (!(await controller.saveSearch(name, search))) {
+            if (confirm(tr.browsingConfirmSavedSearchOverwrite({ name }))) {
+                await controller.saveSearch(name, search, true);
+            }
+        }
+    }
+
+    async function renameSavedSearch(name: string): Promise<void> {
+        const newName = prompt(tr.actionsNewName(), name)?.trim();
+        if (!newName || newName === name) {
+            return;
+        }
+        if (!(await controller.renameSavedSearch(name, newName))) {
+            if (confirm(tr.browsingConfirmSavedSearchOverwrite({ name: newName }))) {
+                await controller.renameSavedSearch(name, newName, true);
+            }
+        }
+    }
+
+    async function deleteSavedSearch(name: string): Promise<void> {
+        if (confirm(`Remove "${name}" from your saved searches?`)) {
+            await controller.removeSavedSearch(name);
+        }
+    }
+
     async function openChangeNotetype(): Promise<void> {
         await saveEditor();
         changeNotetype = await controller.notetypeOfSelected();
@@ -758,6 +790,9 @@ actions with their Qt shortcuts (qt/aqt/browser/browser.py).
                     controller.sidebarSearch(e.detail.item, e.detail.mods),
                 );
             }}
+            on:saveSearch={() => void saveCurrentSearch()}
+            on:renameSearch={(e) => void renameSavedSearch(e.detail.name)}
+            on:deleteSearch={(e) => void deleteSavedSearch(e.detail.name)}
         />
     {/if}
 

@@ -147,6 +147,15 @@ export function buildCardAnswer(
     });
 }
 
+/** The progress indicator next to the answer buttons: "12 left" (new + learning + review still due). */
+export function remainingText(counts: Counts | null): string {
+    if (!counts) {
+        return "";
+    }
+    const total = counts.counts[0] + counts.counts[1] + counts.counts[2];
+    return total === 1 ? "1 left" : `${total} left`;
+}
+
 /** `V3CardInfo.counts` in reviewer.py. */
 export function countsForQueue(queued: QueuedCards): Counts {
     const top = queued.cards[0];
@@ -268,7 +277,6 @@ export class ReviewerController {
     private statesMutated = true;
     private unregister: (() => void)[] = [];
     private hidePlayButtons = false;
-    private showIntervals = true;
     private nightMode = false;
     private running = false;
     private reps = 0;
@@ -362,7 +370,8 @@ export class ReviewerController {
         this.hidePlayButtons = await this.configBool(ConfigKey_Bool.HIDE_AUDIO_PLAY_BUTTONS);
         // Legacy JSON keys; read them all at once so missing ones do not error.
         const config = await this.allConfig();
-        this.showIntervals = (config.estTimes as boolean | undefined) ?? true;
+        // The answer buttons always show the interval they buy (A23); the
+        // Qt "show next review time" option (estTimes) no longer hides it.
         this.showCounts.set((config.dueCounts as boolean | undefined) ?? true);
         this.stateMutationJs = (config.cardStateCustomizer as string | undefined) ?? "";
         this.timeLimitSecs = (config.timeLim as number | undefined) ?? 0;
@@ -597,10 +606,7 @@ export class ReviewerController {
             return;
         }
         const labels = answerLabels();
-        let intervals = ["", "", "", ""];
-        if (this.showIntervals) {
-            intervals = (await describeNextStates(this.states)).vals;
-        }
+        const intervals = (await describeNextStates(this.states)).vals;
         this.buttons.set(
             labels.map((label, i) => ({
                 ease: (i + 1) as Ease,

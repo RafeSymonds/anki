@@ -18,6 +18,7 @@ import {
     normaliseSearchText,
     notetypesSection,
     pushSearchHistory,
+    savedSearchesSection,
     SEARCH_HISTORY_LIMIT,
     sidebarJoin,
     tagsSection,
@@ -154,7 +155,17 @@ describe("sidebar sections", () => {
             tagTree: new TagTreeNode(),
             notetypes: [],
         });
-        expect(sections.map((s) => s.id)).toEqual(["today", "state", "flags", "decks", "notetypes", "tags"]);
+        expect(sections.map((s) => s.id)).toEqual(["saved", "today", "state", "flags", "decks", "notetypes", "tags"]);
+    });
+
+    it("lists saved searches by name, each standing for its search text", () => {
+        const section = savedSearchesSection({ Zebra: "tag:z", apple: "deck:A is:due" });
+        expect(section.id).toBe("saved");
+        expect(section.node).toBeNull();
+        expect(section.children.map((c) => c.name)).toEqual(["apple", "Zebra"]);
+        expect(section.children[0]).toMatchObject({ id: "saved:apple", kind: "savedSearch" });
+        expect(section.children[0].node?.filter).toEqual({ case: "parsableText", value: "deck:A is:due" });
+        expect(savedSearchesSection({}).children).toEqual([]);
     });
 });
 

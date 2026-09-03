@@ -11,12 +11,15 @@ ors with it, Alt negates it, as in qt/aqt/browser/sidebar/tree.py.
     import { createEventDispatcher } from "svelte";
 
     import type { SidebarItem, SidebarModifiers } from "./search";
-    import { filterSidebar, flattenSidebar } from "./search";
+    import { filterSidebar, flattenSidebar, SAVED_SEARCHES_ID } from "./search";
 
     export let items: SidebarItem[] = [];
 
     const dispatch = createEventDispatcher<{
         search: { item: SidebarItem; mods: SidebarModifiers };
+        saveSearch: void;
+        renameSearch: { name: string };
+        deleteSearch: { name: string };
     }>();
 
     let filter = "";
@@ -102,6 +105,37 @@ ors with it, Alt negates it, as in qt/aqt/browser/sidebar/tree.py.
                     <span class="dot" style="background: var({row.item.color})"></span>
                 {/if}
                 <span class="name">{row.item.name}</span>
+                {#if row.item.id === SAVED_SEARCHES_ID}
+                    <button
+                        class="action"
+                        title={tr.browsingSidebarSaveCurrentSearch()}
+                        aria-label={tr.browsingSidebarSaveCurrentSearch()}
+                        on:click|stopPropagation={() => dispatch("saveSearch")}
+                    >
+                        +
+                    </button>
+                {:else if row.item.kind === "savedSearch"}
+                    <span class="actions">
+                        <button
+                            class="action"
+                            title={tr.actionsRename()}
+                            aria-label="{tr.actionsRename()} {row.item.name}"
+                            on:click|stopPropagation={() =>
+                                dispatch("renameSearch", { name: row.item.name })}
+                        >
+                            ✎
+                        </button>
+                        <button
+                            class="action"
+                            title={tr.actionsDelete()}
+                            aria-label="{tr.actionsDelete()} {row.item.name}"
+                            on:click|stopPropagation={() =>
+                                dispatch("deleteSearch", { name: row.item.name })}
+                        >
+                            ×
+                        </button>
+                    </span>
+                {/if}
             </div>
         {/each}
     </div>
@@ -131,6 +165,33 @@ ors with it, Alt negates it, as in qt/aqt/browser/sidebar/tree.py.
         flex: 1;
         overflow-y: auto;
         padding-bottom: 8px;
+    }
+    .action {
+        margin-inline-start: auto;
+        font: inherit;
+        line-height: 1;
+        color: var(--fg-subtle);
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: var(--border-radius);
+        padding: 0 5px;
+        cursor: pointer;
+    }
+    .action:hover {
+        color: var(--fg);
+        border-color: var(--border);
+        background: var(--canvas-elevated);
+    }
+    .actions {
+        margin-inline-start: auto;
+        display: none;
+    }
+    .actions .action {
+        margin-inline-start: 0;
+    }
+    .row:hover .actions,
+    .row:focus-within .actions {
+        display: inline-flex;
     }
     .row {
         display: flex;

@@ -191,6 +191,39 @@ test.describe("browser", () => {
         });
     });
 
+    test("saves the current search, reruns it from the sidebar, renames and removes it", async ({ page }) => {
+        await openBrowser(page, "deck:Default");
+        const sidebar = page.locator(".browser-sidebar");
+        const saved = sidebar.locator(".row", { has: page.locator(".name", { hasText: /^Saved Searches$/ }) });
+        await expect(saved).toBeVisible();
+
+        const name = `Mine ${Date.now() % 100000}`;
+        page.once("dialog", (dialog) => dialog.accept(name));
+        await saved.getByRole("button", { name: "Save Current Search" }).click();
+        const entry = sidebar.locator(".row", { has: page.locator(".name", { hasText: name }) });
+        await expect(entry).toBeVisible();
+
+        // Another search, then the saved one brings the first back.
+        const input = page.locator(".browser input.search");
+        await input.fill("tag:demo");
+        await input.press("Enter");
+        await expect(input).toHaveValue("tag:demo");
+        await entry.click();
+        await expect(input).toHaveValue(/deck:Default/);
+
+        const renamed = `${name} b`;
+        page.once("dialog", (dialog) => dialog.accept(renamed));
+        await entry.hover();
+        await entry.getByRole("button", { name: `Rename ${name}` }).click();
+        const renamedEntry = sidebar.locator(".row", { has: page.locator(".name", { hasText: renamed }) });
+        await expect(renamedEntry).toBeVisible();
+
+        page.once("dialog", (dialog) => dialog.accept());
+        await renamedEntry.hover();
+        await renamedEntry.getByRole("button", { name: `Delete ${renamed}` }).click();
+        await expect(renamedEntry).toHaveCount(0);
+    });
+
     test("sidebar items search and the sort header reorders", async ({ page }) => {
         await openBrowser(page, "deck:Default");
         // The deck, not the "demo" tag.
