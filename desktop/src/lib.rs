@@ -182,42 +182,41 @@ pub fn run(options: Options) {
 fn run_window(options: Options) {
     use tauri::Manager;
 
-    // Build the app first so the bundled resource folder can be resolved,
-    // then open the collection and only then create the window.
     let app = tauri::Builder::default()
         .register_uri_scheme_protocol("anki", scheme::handle)
+        .setup(move |app| {
+            // The bundle's resource folder is only resolvable once the app
+            // exists, so the collection is opened here, before the window.
+            let resource_dir = app.path().resource_dir().ok();
+            let state = open_state(&options, WebRoot::locate(resource_dir));
+            eprintln!("serving web assets from {}", state.web.web.display());
+            state.set_app_handle(app.handle().clone());
+            app.manage(state);
+
+            // ANKI_NO_MENU=1 skips the menu bar, a debugging aid.
+            if std::env::var_os("ANKI_NO_MENU").is_none() {
+                match menu::build(app.handle()) {
+                    Ok(menu) => {
+                        app.set_menu(menu)?;
+                        app.on_menu_event(menu::on_event);
+                    }
+                    Err(err) => eprintln!("menu: {err}"),
+                }
+            }
+
+            let url = format!("anki://localhost{}", start_route());
+            WebviewWindowBuilder::new(app, "main", WebviewUrl::CustomProtocol(url.parse()?))
+                .title("Anki")
+                .inner_size(1180.0, 780.0)
+                .min_inner_size(760.0, 500.0)
+                .title_bar_style(TitleBarStyle::Overlay)
+                .hidden_title(true)
+                .build()?;
+            eprintln!("main window created");
+            Ok(())
+        })
         .build(tauri::generate_context!())
         .expect("failed to build Anki");
-
-    let resource_dir = app.path().resource_dir().ok();
-    let state = open_state(&options, WebRoot::locate(resource_dir));
-    eprintln!("serving web assets from {}", state.web.web.display());
-    state.set_app_handle(app.handle().clone());
-    app.manage(state);
-
-    match menu::build(app.handle()) {
-        Ok(menu) => {
-            if let Err(err) = app.set_menu(menu) {
-                eprintln!("menu: {err}");
-            }
-            app.on_menu_event(menu::on_event);
-        }
-        Err(err) => eprintln!("menu: {err}"),
-    }
-
-    let url = format!("anki://localhost{}", start_route());
-    WebviewWindowBuilder::new(
-        &app,
-        "main",
-        WebviewUrl::CustomProtocol(url.parse().expect("start url")),
-    )
-    .title("Anki")
-    .inner_size(1180.0, 780.0)
-    .min_inner_size(760.0, 500.0)
-    .title_bar_style(TitleBarStyle::Overlay)
-    .hidden_title(true)
-    .build()
-    .expect("failed to create the main window");
 
     app.run(|app, event| {
         if let RunEvent::Exit = event {

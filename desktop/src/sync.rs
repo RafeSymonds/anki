@@ -1,3 +1,6 @@
+// Copyright: Ankitects Pty Ltd and contributors
+// License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
+
 //! Closing and reopening the open collection from the shell: the counterpart
 //! of `close_for_full_sync` / `reopen(after_full_sync=True)` in pylib's
 //! collection.py, reachable from web code as `/_desktop/closeCollection` and

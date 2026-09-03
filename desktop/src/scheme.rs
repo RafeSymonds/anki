@@ -225,6 +225,15 @@ pub fn handle<R: tauri::Runtime>(ctx: UriSchemeContext<'_, R>, req: Request<Vec<
 
 /// Answer one request. Shared by the scheme handler and the HTTP server.
 pub fn dispatch(state: &AppState, method: &Method, path: &str, body: &[u8]) -> Reply {
+    let reply = dispatch_inner(state, method, path, body);
+    // ANKI_DEBUG_REQUESTS=1 logs every request; a debugging aid for the window.
+    if std::env::var_os("ANKI_DEBUG_REQUESTS").is_some() {
+        eprintln!("{} {} -> {}", method, path, reply.status());
+    }
+    reply
+}
+
+fn dispatch_inner(state: &AppState, method: &Method, path: &str, body: &[u8]) -> Reply {
     match resolve(&state.web, method, path) {
         Route::Rpc(name) => run_rpc(state, &name, body),
         Route::FrontendRpc(name) => text(
