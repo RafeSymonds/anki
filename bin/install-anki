@@ -1,0 +1,120 @@
+#!/usr/bin/env bash
+# Install this fork's Anki desktop app from its latest GitHub release.
+#
+#   bin/install-anki [--version X.Y.Z | --dmg PATH] [--dir DIR]
+#                    [--app-name NAME] [--replace]
+#
+# Downloads the release .dmg, checks it against the published SHA256, copies
+# Anki.app into /Applications and clears the quarantine flag macOS puts on
+# downloads, so the app opens on the first try. Also usable straight from the
+# web:
+#
+#   curl -fsSL https://raw.githubusercontent.com/RafeSymonds/anki/main/bin/install-anki | bash
+
+set -euo pipefail
+
+REPO="${ANKI_REPO:-RafeSymonds/anki}"
+BUNDLE_ID="com.rafesymonds.anki"
+DEST_DIR="/Applications"
+APP_NAME="Anki"
+VERSION=""
+DMG_PATH=""
+REPLACE=0
+
+usage() {
+    # $0 is not a file when the script is piped in from curl.
+    if [[ -r "$0" ]]; then
+        sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'
+    else
+        echo "install-anki [--version X.Y.Z | --dmg PATH] [--dir DIR] [--app-name NAME] [--replace]"
+    fi
+    exit "${1:-0}"
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --version) VERSION="${2:?--version needs a value}"; shift 2 ;;
+        --dmg) DMG_PATH="${2:?--dmg needs a value}"; shift 2 ;;
+        --dir) DEST_DIR="${2:?--dir needs a value}"; shift 2 ;;
+        --app-name) APP_NAME="${2:?--app-name needs a value}"; shift 2 ;;
+        --replace) REPLACE=1; shift ;;
+        -h | --help) usage 0 ;;
+        *) echo "unknown option: $1" >&2; usage 2 ;;
+    esac
+done
+
+[[ "$(uname -s)" == "Darwin" ]] || { echo "this app is macOS only" >&2; exit 1; }
+
+if [[ -n "$DMG_PATH" ]]; then
+    [[ -f "$DMG_PATH" ]] || { echo "no such file: $DMG_PATH" >&2; exit 1; }
+elif [[ -z "$VERSION" ]]; then
+    # The /releases/latest URL redirects to /releases/tag/vX.Y.Z.
+    latest="$(curl -fsSL -o /dev/null -w '%{url_effective}' "https://github.com/$REPO/releases/latest")"
+    VERSION="${latest##*/tag/v}"
+    [[ "$VERSION" != "$latest" && -n "$VERSION" ]] || {
+        echo "could not work out the latest version from '$latest'" >&2
+        echo "is there a published release at https://github.com/$REPO/releases ?" >&2
+        exit 1
+    }
+fi
+
+WORK="$(mktemp -d)"
+MOUNT="$WORK/mnt"
+cleanup() {
+    [[ -d "$MOUNT" ]] && hdiutil detach "$MOUNT" -quiet 2>/dev/null || true
+    rm -rf "$WORK"
+}
+trap cleanup EXIT
+
+if [[ -z "$DMG_PATH" ]]; then
+    DMG="Anki-$VERSION-macos-universal.dmg"
+    BASE="https://github.com/$REPO/releases/download/v$VERSION"
+    DMG_PATH="$WORK/$DMG"
+
+    echo "==> downloading Anki $VERSION"
+    curl -fL# --output "$DMG_PATH" "$BASE/$DMG"
+
+    if curl -fsSL --output "$WORK/SHA256SUMS.txt" "$BASE/SHA256SUMS.txt"; then
+        echo "==> checking sha256"
+        (cd "$WORK" && shasum -a 256 -c SHA256SUMS.txt)
+    else
+        echo "warning: no SHA256SUMS.txt in the release; skipping the checksum" >&2
+    fi
+fi
+
+echo "==> mounting the disk image"
+mkdir -p "$MOUNT"
+hdiutil attach -readonly -nobrowse -mountpoint "$MOUNT" "$DMG_PATH" >/dev/null
+SOURCE="$MOUNT/Anki.app"
+[[ -d "$SOURCE" ]] || { echo "no Anki.app inside $DMG_PATH" >&2; exit 1; }
+VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$SOURCE/Contents/Info.plist")"
+
+DEST="$DEST_DIR/$APP_NAME.app"
+if [[ -d "$DEST" && $REPLACE -eq 0 ]]; then
+    # Don't quietly overwrite an official Anki install; it is a different app
+    # that happens to want the same name.
+    existing="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$DEST/Contents/Info.plist" 2>/dev/null || true)"
+    if [[ "$existing" != "$BUNDLE_ID" ]]; then
+        echo "$DEST is a different app ($existing)." >&2
+        echo "Pass --replace to overwrite it, or --app-name 'Anki Desktop' to install alongside it." >&2
+        exit 1
+    fi
+fi
+
+[[ -w "$DEST_DIR" ]] || { echo "$DEST_DIR is not writable; re-run with sudo or pass --dir ~/Applications" >&2; exit 1; }
+
+echo "==> installing to $DEST"
+STAGE="$DEST_DIR/.$APP_NAME.app.incoming"
+rm -rf "$STAGE"
+ditto "$SOURCE" "$STAGE"
+rm -rf "$DEST"
+mv "$STAGE" "$DEST"
+
+# The app is not signed with an Apple developer certificate, so without this
+# macOS refuses the first launch and offers only Cancel or Move to Trash.
+xattr -dr com.apple.quarantine "$DEST" 2>/dev/null || true
+
+echo
+echo "Installed Anki $VERSION to $DEST"
+echo "It opens the same collection as official Anki (~/Library/Application Support/Anki2)."
+echo "Start it with: open \"$DEST\""

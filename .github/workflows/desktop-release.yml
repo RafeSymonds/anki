@@ -1,0 +1,240 @@
+# Builds this fork's Tauri app (desktop/) and publishes it as a GitHub release
+# so people can install it from a .dmg. Upstream's release.yml builds the old
+# Qt app and is unrelated.
+#
+#   gh workflow run desktop-release.yml -f version=0.2.0     (or `bin/anki release 0.2.0`)
+#   git push origin v0.2.0                                   (tag push works too)
+name: Desktop release
+run-name: "Desktop release ${{ inputs.version || github.ref_name }}"
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build, e.g. 0.2.0 (no leading v)"
+        required: true
+        type: string
+      publish:
+        description: "Publish a GitHub release, tagging this run's commit"
+        default: true
+        required: false
+        type: boolean
+      draft:
+        description: "Keep the release a draft (nothing visible until you publish it)"
+        default: false
+        required: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-release
+  cancel-in-progress: false
+
+env:
+  N2_OUTPUT_PROGRESS: "1"
+  N2_OUTPUT_SUCCESS: "1"
+  TAURI_CLI_VERSION: "2.11.4"
+  # No Apple developer certificate: "-" makes the bundler seal the app with an
+  # ad-hoc signature, which is what lets macOS run it once the download flag is
+  # cleared. Without it the bundle keeps only the linker's signature, and its
+  # Info.plist and resources are unsealed.
+  APPLE_SIGNING_IDENTITY: "-"
+
+jobs:
+  build:
+    # An arm64 runner; the bundle is a universal binary, so it covers Intel too.
+    runs-on: macos-14
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 #v4
+        with:
+          submodules: true
+
+      - name: Resolve version
+        id: meta
+        run: |
+          version="${INPUT_VERSION:-${GITHUB_REF_NAME#v}}"
+          if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+            echo "::error::version '$version' is not X.Y.Z or X.Y.Z-prerelease"
+            exit 1
+          fi
+          prerelease=false
+          case "$version" in *-*) prerelease=true ;; esac
+          {
+            echo "version=$version"
+            echo "tag=v$version"
+            echo "prerelease=$prerelease"
+            echo "dmg=Anki-$version-macos-universal.dmg"
+          } >> "$GITHUB_OUTPUT"
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+
+      # desktop/tauri.conf.json carries a placeholder version for dev builds;
+      # the released bundle gets its version from the tag/input instead.
+      - name: Stamp the version into the bundle config
+        run: |
+          python3 - <<'PY'
+          import json, os, pathlib
+
+          path = pathlib.Path("desktop/tauri.conf.json")
+          conf = json.loads(path.read_text())
+          conf["version"] = os.environ["VERSION"]
+          path.write_text(json.dumps(conf, indent=4) + "\n")
+          PY
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+
+      - name: Restore cargo cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 #v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+            ~/.cargo/bin
+            ~/.cargo/.crates.toml
+            ~/.cargo/.crates2.json
+          key: cargo-release-macOS-${{ hashFiles('Cargo.lock') }}-${{ env.TAURI_CLI_VERSION }}
+          restore-keys: cargo-release-macOS-
+
+      # Holds the downloaded node/uv toolchains and node_modules, so the web
+      # assets don't get rebuilt from scratch on every release.
+      - name: Restore build output cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 #v6.1.0
+        with:
+          path: out
+          key: build-release-macOS-${{ github.run_id }}
+          restore-keys: |
+            build-release-macOS-
+            build-macOS-main-
+
+      - name: Setup build environment
+        uses: ./.github/actions/setup-anki
+
+      - name: Install just
+        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 #v4
+
+      - name: Add both macOS targets
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
+      - name: Install the Tauri CLI
+        run: |
+          if [ "$(cargo tauri --version 2>/dev/null | awk '{print $2}')" != "$TAURI_CLI_VERSION" ]; then
+            cargo install tauri-cli --locked --version "$TAURI_CLI_VERSION"
+          fi
+
+      - name: Symlink node_modules
+        run: ln -sf out/node_modules .
+
+      - name: Build web assets
+        run: just web
+
+      - name: Build the app bundle
+        run: |
+          cargo tauri build \
+            --config desktop/tauri.conf.json \
+            --target universal-apple-darwin \
+            --bundles app,dmg
+
+      - name: Collect and verify artifacts
+        run: |
+          dmg=$(find target/universal-apple-darwin/release/bundle/dmg -maxdepth 1 -name '*.dmg' | head -n 1)
+          test -n "$dmg" || { echo "::error::no .dmg was produced"; exit 1; }
+
+          # The .app is moved into the disk image, so check what people will
+          # actually mount. A bundle that is not universal, is signed wrong, or
+          # carries the wrong version is broken for whoever downloads it.
+          mount=$(mktemp -d)/mnt
+          mkdir -p "$mount"
+          hdiutil attach -readonly -nobrowse -mountpoint "$mount" "$dmg" > /dev/null
+          app="$mount/Anki.app"
+          test -d "$app" || { echo "::error::no Anki.app inside $dmg"; exit 1; }
+
+          exe=$(find "$app/Contents/MacOS" -maxdepth 1 -type f | head -n 1)
+          archs=$(lipo -archs "$exe")
+          echo "$exe: $archs"
+          for arch in arm64 x86_64; do
+            case " $archs " in *" $arch "*) ;; *) echo "::error::the app is missing $arch"; exit 1 ;; esac
+          done
+
+          codesign --verify --deep --strict "$app"
+          /usr/libexec/PlistBuddy -c 'Print :NSMicrophoneUsageDescription' "$app/Contents/Info.plist" > /dev/null
+          plist_version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")
+          if [ "$plist_version" != "$VERSION" ]; then
+            echo "::error::bundle version '$plist_version' does not match '$VERSION'"
+            exit 1
+          fi
+          hdiutil detach "$mount" -quiet
+
+          mkdir -p out/release
+          cp "$dmg" "out/release/$DMG_NAME"
+          (cd out/release && shasum -a 256 "$DMG_NAME" | tee SHA256SUMS.txt)
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+          DMG_NAME: ${{ steps.meta.outputs.dmg }}
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a #v7.0.1
+        with:
+          name: anki-desktop-macos
+          path: out/release/
+
+      - name: Write release notes
+        if: github.event_name == 'push' || inputs.publish == true
+        run: |
+          # The checkout is shallow and carries no tags, so ask the API which
+          # release came before this one.
+          previous=$(gh release list --limit 100 --json tagName \
+            --jq "[.[].tagName | select(startswith(\"v\")) | select(. != \"$TAG\")][0] // empty")
+          {
+            cat docs/desktop-install.md
+            if [ -n "$previous" ]; then
+              printf '\n---\n\nChanges: https://github.com/%s/compare/%s...%s\n' \
+                "$GITHUB_REPOSITORY" "$previous" "$TAG"
+            fi
+          } > out/release/notes.md
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.meta.outputs.tag }}
+
+      - name: Publish the release
+        if: github.event_name == 'push' || inputs.publish == true
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" out/release/"$DMG_NAME" out/release/SHA256SUMS.txt --clobber
+            gh release edit "$TAG" --title "Anki $VERSION" --notes-file out/release/notes.md
+          else
+            gh release create "$TAG" \
+              out/release/"$DMG_NAME" out/release/SHA256SUMS.txt \
+              --target "$GITHUB_SHA" \
+              --title "Anki $VERSION" \
+              --notes-file out/release/notes.md \
+              ${DRAFT:+--draft} \
+              ${PRERELEASE:+--prerelease}
+          fi
+          gh release view "$TAG" --json url --jq .url >> "$GITHUB_STEP_SUMMARY"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          VERSION: ${{ steps.meta.outputs.version }}
+          DMG_NAME: ${{ steps.meta.outputs.dmg }}
+          DRAFT: ${{ inputs.draft == true && '1' || '' }}
+          PRERELEASE: ${{ steps.meta.outputs.prerelease == 'true' && '1' || '' }}
+
+      # out/pyenv holds absolute Python paths and out/build.ninja is
+      # regenerated by configure, so neither survives a move between runs.
+      - name: Clean non-cacheable state
+        if: always()
+        run: |
+          rm -rf out/pyenv out/release
+          rm -f out/build.ninja
+
+      - name: Save build output cache
+        if: always()
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 #v6.1.0
+        with:
+          path: out
+          key: build-release-macOS-${{ github.run_id }}

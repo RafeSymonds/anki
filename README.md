@@ -7,6 +7,12 @@
 This repo contains the source code for the computer version of
 [Anki](https://apps.ankiweb.net).
 
+**This fork ships a native macOS app.** The PyQt interface is replaced by a
+Tauri shell (`desktop/`) over the same Rust core, scheduler and AnkiWeb sync.
+Download the .dmg from [Releases](https://github.com/RafeSymonds/anki/releases)
+or install it with one command; see [installing](docs/desktop-install.md).
+Add-ons are not supported.
+
 ## About
 
 Anki is a spaced repetition program. Please see the [website](https://apps.ankiweb.net) to learn more.

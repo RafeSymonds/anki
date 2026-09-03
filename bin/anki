@@ -13,7 +13,8 @@
 #   bin/anki sveltekit         rebuild only the SvelteKit app (the shell) without ninja
 #   bin/anki e2e-quick [port] [playwright args]   e2e without rebuilding assets
 #   bin/anki worktree-init     prepare out/ in a git worktree (shares heavy deps with the main checkout)
-#   bin/anki package           build a self-contained Anki.app and .dmg (target/release/bundle)
+#   bin/anki package [--universal]    build a self-contained Anki.app and .dmg (target/release/bundle)
+#   bin/anki release <version> build and publish that version on GitHub (Actions does the work)
 #   bin/anki bench [port]      measure cold start and backend call latency in HTTP mode
 #
 # Env: ANKI_BASE (profile folder), ANKI_START_ROUTE (page to open, e.g. /congrats)
@@ -156,10 +157,41 @@ e2e_quick() {
 }
 
 package() {
+    local target=()
+    local out="$ROOT/target/release/bundle"
+    if [[ "${1:-}" == "--universal" ]]; then
+        # What the release workflow ships: one bundle for Intel and Apple silicon.
+        rustup target add aarch64-apple-darwin x86_64-apple-darwin >/dev/null
+        target=(--target universal-apple-darwin)
+        out="$ROOT/target/universal-apple-darwin/release/bundle"
+    fi
     build_web
     echo "==> building release bundle"
-    cargo tauri build --config desktop/tauri.conf.json 2>&1 | tail -20
-    echo "bundle: $ROOT/target/release/bundle/macos/Anki.app"
+    # There is no Apple developer certificate; "-" seals the bundle with an
+    # ad-hoc signature, which macOS accepts once the download flag is cleared.
+    APPLE_SIGNING_IDENTITY="${APPLE_SIGNING_IDENTITY:--}" \
+        cargo tauri build --config desktop/tauri.conf.json "${target[@]}" 2>&1 | tail -20
+    echo "bundle: $out/dmg"
+}
+
+# The build happens in GitHub Actions (.github/workflows/desktop-release.yml),
+# which tags this commit, attaches the .dmg and publishes the release.
+release() {
+    local version="${1:-}"
+    if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+        echo "usage: bin/anki release <version>   e.g. bin/anki release 0.2.0" >&2
+        return 2
+    fi
+    local branch
+    branch="$(git rev-parse --abbrev-ref HEAD)"
+    if [[ -n "$(git status --porcelain)" ]]; then
+        echo "working tree is dirty; the release is built from what is pushed" >&2
+    fi
+    if ! git diff --quiet "@{upstream}" 2>/dev/null; then
+        echo "note: $branch differs from its upstream; push first or the release will miss commits" >&2
+    fi
+    gh workflow run desktop-release.yml --ref "$branch" -f version="$version" -f publish=true
+    echo "watch it with: gh run watch \$(gh run list --workflow=desktop-release.yml --limit 1 --json databaseId --jq '.[0].databaseId')"
 }
 
 # Cold start (process launch to /_anki/readyz) and RPC round trips against a
@@ -217,10 +249,11 @@ case "${1:-}" in
     sveltekit) sveltekit_build ;;
     e2e-quick) shift; e2e_quick "$@" ;;
     worktree-init) worktree_init ;;
-    package) package ;;
+    package) shift; package "$@" ;;
+    release) shift; release "$@" ;;
     bench) shift; bench "$@" ;;
     *)
-        sed -n '2,19p' "$0"
+        sed -n '2,20p' "$0"
         exit 2
         ;;
 esac

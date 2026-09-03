@@ -235,7 +235,8 @@ bin/anki serve [port] [--fresh]   HTTP mode; --fresh seeds out/anki-e2e-base
 bin/anki e2e                  Playwright e2e (= just test-e2e-desktop)
 bin/anki sveltekit            rebuild only the SvelteKit app (the shell) without ninja, ~35 s
 bin/anki e2e-quick [port] [spec]   e2e without rebuilding assets (pair with `bin/anki sveltekit`)
-bin/anki package              self-contained Anki.app and .dmg in target/release/bundle
+bin/anki package [--universal]    self-contained Anki.app and .dmg in target/release/bundle
+bin/anki release <version>    build and publish that version on GitHub
 bin/anki bench                cold start and backend round-trip latency
 bin/anki worktree-init        prepare a git worktree to build and test on its own
 just web                      build the web assets the app serves
@@ -259,6 +260,33 @@ Working in a git worktree (several people or agents at once): run
 `bin/anki e2e-quick <port>` instead of the ninja-based recipes, and pick a
 distinct port per worktree. The ninja build in the main checkout ignores
 `.claude/`, where agent worktrees live.
+
+## Releasing
+
+`.github/workflows/desktop-release.yml` builds the app on a macOS runner and
+publishes it as a GitHub release, so installing it means downloading one .dmg.
+
+```
+bin/anki release 0.2.0     # = gh workflow run desktop-release.yml -f version=0.2.0
+git push origin v0.2.0     # a tag push runs the same workflow
+```
+
+The run stamps the version into `desktop/tauri.conf.json` (the committed value
+is only a placeholder for dev builds), builds the web assets with `just web`,
+then `cargo tauri build --target universal-apple-darwin`, so one bundle covers
+Intel and Apple silicon. Before publishing it mounts the disk image and
+refuses a bundle that is not universal, fails `codesign --verify`, or carries
+the wrong version. The release gets `Anki-<version>-macos-universal.dmg` and
+`SHA256SUMS.txt`, with `docs/desktop-install.md` as the notes plus a compare
+link to the previous `v*` tag. `bin/anki package --universal` builds the same
+bundle locally.
+
+There is no Apple developer certificate, so the app is only ad-hoc signed
+(`APPLE_SIGNING_IDENTITY=-`) and macOS blocks the first launch until the
+quarantine flag is cleared; `bin/install-anki` does that for people who use
+it, and `docs/desktop-install.md` covers the manual route. Real signing and
+notarisation would need an Apple certificate plus the notary secrets
+upstream's `release.yml` already reads.
 
 ## Conventions
 
