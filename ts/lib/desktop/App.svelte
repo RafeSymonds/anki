@@ -486,6 +486,8 @@ active.
                     on:options={(e) => openDeckOptions(e.detail)}
                     on:changed={refreshDecks}
                     on:customStudy={() => tools?.run("customStudy")}
+                    on:add={openAdd}
+                    on:import={() => tools?.run("import")}
                 />
             {/if}
         </div>

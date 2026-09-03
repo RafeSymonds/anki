@@ -27,7 +27,7 @@ desktop/                     Rust crate `anki-desktop` (Tauri app + HTTP mode)
 ts/lib/desktop/              the Svelte app shell (mounted by ts/routes/+page.svelte)
   App.svelte                 shell: sidebar + screens (overview, review, add, embedded page)
   DeckSidebar.svelte         deck tree
-  Overview.svelte            deck overview / congrats
+  Overview.svelte            deck overview / congrats, daily-limit notices (limits.ts), first run (EmptyState.svelte)
   Reviewer.svelte            study screen chrome; reviewer.ts is the logic (port of reviewer.py)
   CardFrame.svelte           iframe around desktop/web/card.html
   EditorPanel.svelte         iframe around the note editor route (/editor/?mode=add|current)

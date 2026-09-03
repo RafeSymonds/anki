@@ -51,11 +51,13 @@ describe("shortName", () => {
 });
 
 describe("isFreshCollection", () => {
-    it("is true only for a lone, empty Default deck", () => {
+    it("is true only while no deck holds any card", () => {
         const fresh = new DeckTreeNode({ children: [node(1, "Default")] });
         expect(isFreshCollection(fresh)).toBe(true);
+        const emptyDecks = new DeckTreeNode({ children: [node(1, "Default"), node(2, "Demo")] });
+        expect(isFreshCollection(emptyDecks)).toBe(true);
         const used = new DeckTreeNode({ children: [node(1, "Default", { totalIncludingChildren: 3 })] });
         expect(isFreshCollection(used)).toBe(false);
-        expect(isFreshCollection(tree())).toBe(false);
+        expect(isFreshCollection(new DeckTreeNode({ children: [] }))).toBe(true);
     });
 });

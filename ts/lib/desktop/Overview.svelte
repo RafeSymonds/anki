@@ -13,11 +13,15 @@ direct routes to the deck options and to studying more.
     import { UnburyDeckRequest_Mode } from "@generated/anki/scheduler_pb";
     import {
         congratsInfo,
+        customStudyDefaults,
         emptyFilteredDeck,
+        extendLimits,
         getDeck,
+        getDeckConfig,
         getQueuedCards,
         rebuildFilteredDeck,
         renderMarkdown,
+        schedTimingToday,
         unburyDeck,
     } from "@generated/backend";
     import * as tr from "@generated/ftl";
@@ -25,7 +29,10 @@ direct routes to the deck options and to studying more.
 
     import CongratsPage from "../../routes/congrats/CongratsPage.svelte";
     import { installBridgeHandler, removeBridgeHandler } from "./bridge";
-    import { findNode } from "./decks";
+    import { findNode, isFreshCollection } from "./decks";
+    import EmptyState from "./EmptyState.svelte";
+    import type { LimitNotice } from "./limits";
+    import { effectiveLimits, limitNotices } from "./limits";
 
     export let deckId: bigint;
     export let tree: DeckTreeNode | null;
@@ -37,6 +44,8 @@ direct routes to the deck options and to studying more.
         options: bigint;
         changed: void;
         customStudy: void;
+        add: void;
+        import: void;
     }>();
 
     /** Rebuild / Empty for filtered decks (overview.py _link_handler). */
@@ -69,6 +78,8 @@ direct routes to the deck options and to studying more.
     let info: CongratsInfoResponse | null = null;
     let description = "";
     let loading = true;
+    let notices: LimitNotice[] = [];
+    $: fresh = tree !== null && isFreshCollection(tree);
 
     async function load(id: bigint, root: DeckTreeNode | null): Promise<void> {
         loading = true;
@@ -81,8 +92,50 @@ direct routes to the deck options and to studying more.
         counts = [queued.newCount, queued.learningCount, queued.reviewCount];
         finished = queued.cards.length === 0;
         info = finished ? await congratsInfo({}) : null;
+        notices = info ? await loadNotices(deck, info) : [];
         description = await describe(deck);
         loading = false;
+    }
+
+    /** The numbers behind "the daily limit has been reached". */
+    async function loadNotices(
+        deck: Deck,
+        info: CongratsInfoResponse,
+    ): Promise<LimitNotice[]> {
+        if (!info.newRemaining && !info.reviewRemaining) {
+            return [];
+        }
+        const config =
+            deck.kind.case === "normal"
+                ? ((await getDeckConfig({ dcid: deck.kind.value.configId })).config ??
+                  null)
+                : null;
+        const timing = await schedTimingToday({});
+        const limits = effectiveLimits(deck, config, timing.daysElapsed);
+        const defaults = await customStudyDefaults({ deckId: deck.id });
+        return limitNotices(info, defaults, limits);
+    }
+
+    /** One click more for today, through the same call custom study uses. */
+    async function extend(notice: LimitNotice): Promise<void> {
+        await extendLimits({
+            deckId,
+            newDelta: notice.kind === "new" ? notice.step : 0,
+            reviewDelta: notice.kind === "review" ? notice.step : 0,
+        });
+        dispatch("changed");
+    }
+
+    function noticeText(notice: LimitNotice): string {
+        return notice.kind === "new"
+            ? `Today's limit of ${notice.limit} new cards is done. ${notice.waiting} more new cards are waiting.`
+            : `Today's limit of ${notice.limit} reviews is done. ${notice.waiting} more cards are due.`;
+    }
+
+    function extendLabel(notice: LimitNotice): string {
+        return notice.kind === "new"
+            ? `Study ${notice.step} more new cards today`
+            : `Review ${notice.step} more cards today`;
     }
 
     async function describe(deck: Deck): Promise<string> {
@@ -127,7 +180,12 @@ direct routes to the deck options and to studying more.
 </script>
 
 <div class="overview">
-    {#if loading}
+    {#if fresh}
+        <EmptyState
+            on:add={() => dispatch("add")}
+            on:import={() => dispatch("import")}
+        />
+    {:else if loading}
         <p class="subtle">…</p>
     {:else if deck}
         <h1>{deck.name}</h1>
@@ -140,6 +198,16 @@ direct routes to the deck options and to studying more.
         {#if finished && info}
             <div class="congrats">
                 <CongratsPage {info} refreshPeriodically={true} />
+                {#each notices as notice (notice.kind)}
+                    <div class="limit-notice">
+                        <p>{noticeText(notice)}</p>
+                        {#if notice.step > 0}
+                            <button class="primary" on:click={() => extend(notice)}>
+                                {extendLabel(notice)}
+                            </button>
+                        {/if}
+                    </div>
+                {/each}
                 <div class="actions">
                     <button on:click={() => dispatch("options", deckId)}>
                         {tr.actionsOptions()}
@@ -314,6 +382,18 @@ direct routes to the deck options and to studying more.
     }
     .congrats :global(.congrats) {
         text-align: start;
+    }
+    .limit-notice {
+        margin: 8px auto 16px;
+        max-width: 520px;
+        padding: 12px 16px;
+        border: 1px solid var(--border);
+        border-radius: var(--border-radius-medium);
+        background: var(--canvas-elevated);
+        text-align: start;
+    }
+    .limit-notice p {
+        margin: 0 0 8px;
     }
     .subtle {
         color: var(--fg-subtle);

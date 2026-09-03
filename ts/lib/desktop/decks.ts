@@ -77,13 +77,9 @@ export function findNode(root: DeckTreeNode, deckId: bigint): DeckTreeNode | und
     return undefined;
 }
 
-/** True when the collection holds nothing but an empty Default deck. */
+/** True when the collection has no cards at all, whatever decks exist. */
 export function isFreshCollection(root: DeckTreeNode): boolean {
-    if (root.children.length !== 1) {
-        return false;
-    }
-    const only = root.children[0];
-    return only.deckId === 1n && only.children.length === 0 && only.totalIncludingChildren === 0;
+    return root.children.every((deck) => deck.totalIncludingChildren === 0);
 }
 
 export async function fetchDeckTree(): Promise<DeckTreeNode> {
