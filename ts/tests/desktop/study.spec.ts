@@ -6,6 +6,8 @@ import { expect, test } from "@playwright/test";
 test.describe("deck list and study", () => {
     test("shows the seeded decks with counts", async ({ page }) => {
         await page.goto("/");
+        await page.locator("nav.sidebar .row", { hasText: "Default" }).click();
+        await page.locator("nav.sidebar .row", { hasText: "Default" }).click();
         const sidebar = page.locator("nav.sidebar");
         await expect(sidebar.locator(".row", { hasText: "Default" })).toBeVisible();
         await expect(sidebar.locator(".row", { hasText: "Demo" })).toBeVisible();
@@ -21,6 +23,8 @@ test.describe("deck list and study", () => {
 
     test("answers a card and moves to the next one", async ({ page }) => {
         await page.goto("/");
+        await page.locator("nav.sidebar .row", { hasText: "Default" }).click();
+        await page.locator("nav.sidebar .row", { hasText: "Default" }).click();
         await page.getByRole("button", { name: "Study Now" }).click();
 
         const card = page.frameLocator("iframe[title=card]").locator("#qa");
@@ -40,6 +44,8 @@ test.describe("deck list and study", () => {
 
     test("undo brings the answered card back", async ({ page }) => {
         await page.goto("/");
+        await page.locator("nav.sidebar .row", { hasText: "Default" }).click();
+        await page.locator("nav.sidebar .row", { hasText: "Default" }).click();
         await page.getByRole("button", { name: "Study Now" }).click();
         const card = page.frameLocator("iframe[title=card]").locator("#qa");
         await expect(card).toContainText("Question");
@@ -56,6 +62,8 @@ test.describe("deck list and study", () => {
 
     test("opens and closes deck options", async ({ page }) => {
         await page.goto("/");
+        await page.locator("nav.sidebar .row", { hasText: "Default" }).click();
+        await page.locator("nav.sidebar .row", { hasText: "Default" }).click();
         await page.getByRole("button", { name: "Options" }).first().click();
         const options = page.frameLocator("iframe[title=page]");
         await expect(options.getByRole("heading", { name: "Daily Limits" }).first()).toBeVisible({ timeout: 20_000 });

@@ -13,6 +13,7 @@ function fieldLabel(editor: FrameLocator, index: number): Locator {
 
 async function openNoteTypes(page: Page): Promise<void> {
     await page.goto("/");
+    await page.locator("nav.sidebar .row", { hasText: "Default" }).click();
     await expect(page.getByRole("button", { name: "Study Now" })).toBeVisible();
     await page.getByRole("button", { name: /Tools/ }).click();
     await page.getByRole("menuitem", { name: /Manage Note Types/ }).click();
@@ -70,6 +71,8 @@ test.describe("note types", () => {
 
     test("the editor's Fields button opens the dialog for its note type", async ({ page }) => {
         await page.goto("/");
+        await page.locator("nav.sidebar .row", { hasText: "Default" }).click();
+        await page.locator("nav.sidebar .row", { hasText: "Default" }).click();
         await page.getByRole("button", { name: "Add", exact: true }).click();
         const editor = editorFrame(page);
         await expect(fieldLabel(editor, 0)).toHaveText("Front", { timeout: 20_000 });

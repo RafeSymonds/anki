@@ -20,7 +20,12 @@ import { HandlerList } from "$lib/sveltelib/handler-list";
  */
 function safePlaceCaretAfterContent(editable: HTMLElement): void {
     placeCaretAfterContent(editable);
-    restoreSelection(editable, saveSelection(editable)!);
+    // WebKit does not expose a selection inside a shadow root through
+    // document.getSelection(), so there may be nothing to restore.
+    const location = saveSelection(editable);
+    if (location) {
+        restoreSelection(editable, location);
+    }
 }
 
 function restoreCaret(element: HTMLElement, location: SelectionLocation | null): void {

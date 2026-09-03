@@ -24,9 +24,15 @@ export default defineConfig({
         trace: "retain-on-failure",
         screenshot: "only-on-failure",
     },
+    // WebKit is the engine the real window uses; Chromium is kept for its
+    // tooling. ANKI_E2E_BROWSERS=chromium (or webkit) runs one of them.
     projects: [
         { name: "chromium", use: { ...devices["Desktop Chrome"] } },
-    ],
+        { name: "webkit", use: { ...devices["Desktop Safari"] } },
+    ].filter((project) => {
+        const wanted = process.env.ANKI_E2E_BROWSERS;
+        return !wanted || wanted.split(",").includes(project.name);
+    }),
     webServer: {
         command: `bin/anki serve ${PORT} --fresh`,
         url: `http://127.0.0.1:${PORT}/_anki/readyz`,

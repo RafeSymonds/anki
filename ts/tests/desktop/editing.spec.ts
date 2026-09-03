@@ -46,6 +46,7 @@ test.describe("adding and editing notes", () => {
 
     test("edits the current card during review and the card re-renders", async ({ page }) => {
         await page.goto("/");
+        await page.locator("nav.sidebar .row", { hasText: "Default" }).click();
         await page.getByRole("button", { name: "Study Now" }).click();
         const card = page.frameLocator("iframe[title=card]").locator("#qa");
         await expect(card).toContainText("What is the capital of country");
@@ -55,16 +56,10 @@ test.describe("adding and editing notes", () => {
         const front = editableField(editor, 0);
         await expect(front).toBeVisible({ timeout: 20_000 });
         await front.click();
-        // Put the caret at the very end of the field, past any wrapped line.
-        await front.evaluate((el) => {
-            const range = el.ownerDocument.createRange();
-            range.selectNodeContents(el);
-            range.collapse(false);
-            const selection = el.ownerDocument.getSelection();
-            selection?.removeAllRanges();
-            selection?.addRange(range);
-        });
-        await front.pressSequentially(" EDITED");
+        // Replace the text rather than steering the caret: selection APIs
+        // inside the editor's shadow root differ between engines.
+        await front.press("Meta+a");
+        await front.pressSequentially("What is the capital of country 0? EDITED");
 
         // Closing saves and redraws the card with the new text.
         await page.locator(".editor-header button").click();

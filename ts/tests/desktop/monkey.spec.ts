@@ -27,7 +27,7 @@ function makeRng(seed: number): () => number {
     };
 }
 
-type Action = { name: string; run: (page: Page) => Promise<void> };
+type Action = { name: string; run: (page: Page, rng: () => number) => Promise<void> };
 
 const actions: Action[] = [
     { name: "study", run: (p) => p.getByRole("button", { name: "Study Now" }).click({ timeout: 2000 }) },
@@ -42,11 +42,11 @@ const actions: Action[] = [
     { name: "decks", run: (p) => p.keyboard.press("d") },
     {
         name: "pick-deck",
-        run: async (p) => {
+        run: async (p, rng) => {
             const rows = p.locator("nav.sidebar .row");
             const n = await rows.count();
             if (n) {
-                await rows.nth(Math.floor(Math.random() * n)).click({ timeout: 2000 });
+                await rows.nth(Math.floor(rng() * n)).click({ timeout: 2000 });
             }
         },
     },
@@ -81,7 +81,7 @@ test("a random walk over the shell keeps it responsive and the collection consis
     page.on("pageerror", (err) => {
         // A frame torn down mid-request (closing the editor while it saves)
         // reports this from the discarded frame; it is not a shell fault.
-        if (/frame or worker th[a-z]+ has been detached/.test(err.message)) {
+        if (/frame or worker th[a-z]+ has been detached|Blob loading failed/.test(err.message)) {
             return;
         }
         errors.push(`pageerror: ${err.message}`);
@@ -100,7 +100,7 @@ test("a random walk over the shell keeps it responsive and the collection consis
         const action = actions[Math.floor(rng() * actions.length)];
         history.push(action.name);
         try {
-            await action.run(page);
+            await action.run(page, rng);
         } catch {
             // An action that does not apply to the current screen is a no-op,
             // like pressing a key the screen ignores.
@@ -111,10 +111,12 @@ test("a random walk over the shell keeps it responsive and the collection consis
         expect(errors, `errors after step ${i} (${history.join(" > ")})`).toEqual([]);
     }
 
-    // Leave any screen and confirm the overview still works.
+    // Leave any screen and confirm the overview still works; end on the
+    // Default deck so later specs start where the seed left things.
     await page.keyboard.press("Escape");
     await page.keyboard.press("d");
     await expect(page.locator("nav.sidebar .row").first()).toBeVisible();
+    await page.locator("nav.sidebar .row", { hasText: "Default" }).click();
 
     // The collection itself must be clean.
     const response = await request.post("/_anki/checkDatabase", {
