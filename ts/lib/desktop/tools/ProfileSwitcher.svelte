@@ -67,7 +67,9 @@ closing and reopening its main window.
     }
 </script>
 
-<div class="backdrop" on:click|self={() => dispatch("close")} on:keydown={onKeydown}>
+<svelte:window on:keydown={onKeydown} />
+
+<div class="backdrop" role="presentation" on:click|self={() => dispatch("close")}>
     <div class="dialog" role="dialog" aria-modal="true" aria-label="Switch profile">
         <h2>Switch Profile</h2>
         <p class="hint">Each profile has its own collection, settings and media.</p>

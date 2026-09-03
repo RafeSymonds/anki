@@ -174,3 +174,42 @@ export function defaultColumnWidth(key: string): number {
             return 110;
     }
 }
+
+// Column widths (the Qt table keeps its header state; the shell keeps
+// per-column widths in the profile settings)
+// ---
+
+export const COLUMN_WIDTHS_KEY = "browserColumnWidths";
+export const MIN_COLUMN_WIDTH = 48;
+
+/** Stored widths, ignoring anything that is not a sensible number. */
+export function sanitizeColumnWidths(stored: unknown): Record<string, number> {
+    const widths: Record<string, number> = {};
+    if (stored && typeof stored === "object") {
+        for (const [key, value] of Object.entries(stored as Record<string, unknown>)) {
+            if (typeof value === "number" && Number.isFinite(value) && value >= MIN_COLUMN_WIDTH) {
+                widths[key] = Math.round(value);
+            }
+        }
+    }
+    return widths;
+}
+
+export function columnWidth(key: string, widths: Readonly<Record<string, number>>): number {
+    return widths[key] ?? defaultColumnWidth(key);
+}
+
+/** The CSS grid template for the active columns; the last one takes the slack. */
+export function columnTemplate(keys: readonly string[], widths: Readonly<Record<string, number>>): string {
+    return keys
+        .map((key, i) => {
+            const width = columnWidth(key, widths);
+            return i === keys.length - 1 ? `minmax(${width}px, 1fr)` : `${width}px`;
+        })
+        .join(" ");
+}
+
+/** A drag of `deltaX` pixels from a column `startWidth` wide. */
+export function resizedWidth(startWidth: number, deltaX: number): number {
+    return Math.max(MIN_COLUMN_WIDTH, Math.round(startWidth + deltaX));
+}

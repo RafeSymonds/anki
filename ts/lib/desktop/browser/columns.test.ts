@@ -12,11 +12,15 @@ import { describe, expect, it } from "vitest";
 import {
     activeColumnsKey,
     columnLabel,
+    columnTemplate,
+    columnWidth,
     defaultColumns,
     effectiveSort,
     elideClass,
+    resizedWidth,
     rowColorName,
     rowColorVariable,
+    sanitizeColumnWidths,
     sortAfterHeaderClick,
     sortBackwardsKey,
     sortColumnKey,
@@ -123,5 +127,25 @@ describe("row appearance", () => {
         expect(elideClass(BrowserRow_Cell_TextElideMode.ElideLeft)).toBe("elide-left");
         expect(elideClass(BrowserRow_Cell_TextElideMode.ElideMiddle)).toBe("elide-right");
         expect(elideClass(BrowserRow_Cell_TextElideMode.ElideNone)).toBe("elide-none");
+    });
+});
+
+describe("column widths", () => {
+    it("builds the grid template from stored widths with defaults, last column stretching", () => {
+        expect(columnTemplate(["noteFld", "deck", "cardDue"], { deck: 200 })).toBe(
+            "320px 200px minmax(110px, 1fr)",
+        );
+        expect(columnTemplate(["noteFld"], {})).toBe("minmax(320px, 1fr)");
+        expect(columnWidth("deck", { deck: 90 })).toBe(90);
+    });
+
+    it("clamps a drag to the minimum width", () => {
+        expect(resizedWidth(200, 35.4)).toBe(235);
+        expect(resizedWidth(200, -500)).toBe(48);
+    });
+
+    it("drops malformed stored widths", () => {
+        expect(sanitizeColumnWidths({ deck: 150.6, noteFld: "wide", tags: 10, cardDue: NaN })).toEqual({ deck: 151 });
+        expect(sanitizeColumnWidths(null)).toEqual({});
     });
 });

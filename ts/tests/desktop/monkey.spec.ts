@@ -55,7 +55,7 @@ const actions: Action[] = [
         run: async (p) => {
             await p.getByRole("button", { name: "Options" }).first().click({ timeout: 2000 });
             await p.frameLocator("iframe[title=page]").getByRole("heading", { name: "Daily Limits" }).first()
-                .waitFor({ timeout: 15_000 });
+                .waitFor({ timeout: 8000 });
             await p.getByRole("button", { name: /Close/ }).first().click({ timeout: 2000 });
         },
     },
@@ -64,11 +64,113 @@ const actions: Action[] = [
         run: async (p) => {
             await p.keyboard.press("a");
             await p.frameLocator("iframe[title=editor]").locator(".field-container").first().waitFor({
-                timeout: 15_000,
+                timeout: 8000,
             });
             await p.getByRole("button", { name: /Close/ }).first().click({ timeout: 2000 });
         },
     },
+    // The browser: open it, then poke at whatever is there.
+    {
+        name: "browse",
+        run: async (p) => {
+            await p.getByRole("button", { name: "Browse" }).click({ timeout: 2000 });
+            await p.locator(".browser .table .row").first().waitFor({ timeout: 8000 });
+        },
+    },
+    {
+        name: "browser-sidebar",
+        run: async (p, rng) => {
+            const rows = p.locator(".browser-sidebar .row");
+            const n = await rows.count();
+            if (n) {
+                await rows.nth(Math.floor(rng() * n)).click({ timeout: 2000 });
+            }
+        },
+    },
+    {
+        name: "browser-row",
+        run: async (p, rng) => {
+            const rows = p.locator(".browser .table .row");
+            const n = Math.min(await rows.count(), 20);
+            if (n) {
+                await rows.nth(Math.floor(rng() * n)).click({ timeout: 2000 });
+            }
+        },
+    },
+    {
+        name: "browser-sort",
+        run: async (p, rng) => {
+            const heads = p.locator(".browser .head");
+            const n = await heads.count();
+            if (n) {
+                await heads.nth(Math.floor(rng() * n)).click({ timeout: 2000 });
+            }
+        },
+    },
+    {
+        name: "browser-resize",
+        run: async (p, rng) => {
+            const handles = p.locator(".browser .head-cell .resizer");
+            const n = await handles.count();
+            if (!n) {
+                return;
+            }
+            const box = await handles.nth(Math.floor(rng() * n)).boundingBox();
+            if (!box) {
+                return;
+            }
+            const x = box.x + 2;
+            const y = box.y + box.height / 2;
+            await p.mouse.move(x, y);
+            await p.mouse.down();
+            await p.mouse.move(x + Math.floor(rng() * 160) - 60, y, { steps: 3 });
+            await p.mouse.up();
+        },
+    },
+    {
+        name: "browser-save-search",
+        run: async (p) => {
+            await p.getByRole("button", { name: "Save Current Search" }).click({ timeout: 2000 });
+        },
+    },
+    {
+        name: "browser-delete-search",
+        run: async (p, rng) => {
+            const rows = p.locator(".browser-sidebar .row", { has: p.locator(".actions") });
+            const n = await rows.count();
+            if (!n) {
+                return;
+            }
+            const row = rows.nth(Math.floor(rng() * n));
+            await row.hover({ timeout: 2000 });
+            await row.locator("button[aria-label^='Delete']").click({ timeout: 2000 });
+        },
+    },
+    {
+        name: "notetype-options",
+        run: async (p, rng) => {
+            await p.getByRole("button", { name: /Tools/ }).click({ timeout: 2000 });
+            await p.getByRole("menuitem", { name: /Manage Note Types/ }).click({ timeout: 2000 });
+            const rows = p.locator(".notetypes .row");
+            await rows.first().waitFor({ timeout: 10_000 });
+            await rows.nth(Math.floor(rng() * (await rows.count()))).click({ timeout: 2000 });
+            await p.getByRole("button", { name: "Options", exact: true }).click({ timeout: 2000 });
+            const dialog = p.getByRole("dialog", { name: /Options for/ });
+            await dialog.getByLabel("LaTeX header").waitFor({ timeout: 10_000 });
+            await dialog.getByRole("button", { name: "Cancel" }).click({ timeout: 2000 });
+        },
+    },
+    {
+        name: "stats",
+        run: async (p) => {
+            await p.getByRole("button", { name: "Statistics" }).click({ timeout: 2000 });
+            await p.frameLocator("iframe[title=page]").getByText("Future Due", { exact: true }).first().waitFor({
+                timeout: 8000,
+            });
+            await p.getByRole("button", { name: /Close/ }).first().click({ timeout: 2000 });
+        },
+    },
+    { name: "close", run: (p) => p.getByRole("button", { name: /Close/ }).first().click({ timeout: 2000 }) },
 ];
 
 test("a random walk over the shell keeps it responsive and the collection consistent", async ({ page, request }) => {
@@ -92,6 +194,14 @@ test("a random walk over the shell keeps it responsive and the collection consis
         }
     });
 
+    // Prompts (a saved search's name) get a fresh name; confirms are accepted.
+
+    let prompts = 0;
+
+    page.on("dialog", (dialog) => {
+        void dialog.accept(dialog.type() === "prompt" ? `walk ${seed}-${++prompts}` : undefined);
+    });
+
     await page.goto("/");
     await expect(page.locator("nav.sidebar .row").first()).toBeVisible();
 
@@ -112,8 +222,15 @@ test("a random walk over the shell keeps it responsive and the collection consis
     }
 
     // Leave any screen and confirm the overview still works; end on the
-    // Default deck so later specs start where the seed left things.
-    await page.keyboard.press("Escape");
+    // Default deck so later specs start where the seed left things. A
+    // dialog a slow step left open is closed through its own buttons.
+    for (let i = 0; i < 3; i++) {
+        await page.keyboard.press("Escape");
+        const dismiss = page.getByRole("button", { name: /^(Cancel|Close|Got it)$/ }).first();
+        if (await page.locator("[role=dialog], .backdrop").count()) {
+            await dismiss.click({ timeout: 2000 }).catch(() => undefined);
+        }
+    }
     await page.keyboard.press("d");
     await expect(page.locator("nav.sidebar .row").first()).toBeVisible();
     await page.locator("nav.sidebar .row", { hasText: "Default" }).click();

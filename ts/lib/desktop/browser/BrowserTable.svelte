@@ -14,9 +14,12 @@ the column list, a right-click on a row asks the screen for the actions menu.
     import type { BrowserController } from "./browser";
     import {
         columnLabel,
+        columnTemplate,
         columnTooltip,
+        columnWidth,
         defaultColumnWidth,
         elideClass,
+        resizedWidth,
         rowColorName,
         rowColorVariable,
     } from "./columns";
@@ -46,12 +49,64 @@ the column list, a right-click on a row asks the screen for the actions menu.
         key,
         column: columnByKey.get(key) ?? null,
     }));
-    $: template = active
-        .map(({ key }, i) => {
-            const width = defaultColumnWidth(key);
-            return i === active.length - 1 ? `minmax(${width}px, 1fr)` : `${width}px`;
-        })
-        .join(" ");
+    const columnWidths = controller.columnWidths;
+    $: template = columnTemplate(
+        active.map(({ key }) => key),
+        $columnWidths,
+    );
+
+    // Dragging the handle at a header's end resizes that column; the width
+    // is stored when the pointer is released.
+    let resizing: {
+        key: string;
+        startX: number;
+        startWidth: number;
+        width: number;
+    } | null = null;
+    function startResize(event: PointerEvent, key: string): void {
+        event.stopPropagation();
+        event.preventDefault();
+        const startWidth = columnWidth(key, $columnWidths);
+        resizing = { key, startX: event.clientX, startWidth, width: startWidth };
+        (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    }
+    function moveResize(event: PointerEvent): void {
+        if (!resizing) {
+            return;
+        }
+        resizing.width = resizedWidth(
+            resizing.startWidth,
+            event.clientX - resizing.startX,
+        );
+        columnWidths.update((widths) => ({
+            ...widths,
+            [resizing!.key]: resizing!.width,
+        }));
+    }
+    /** Arrow keys on a focused handle resize by 10px. */
+    function nudgeResize(event: KeyboardEvent, key: string): void {
+        let delta = 0;
+        if (event.key === "ArrowRight") {
+            delta = 10;
+        } else if (event.key === "ArrowLeft") {
+            delta = -10;
+        } else {
+            return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        void controller.setColumnWidth(
+            key,
+            resizedWidth(columnWidth(key, $columnWidths), delta),
+        );
+    }
+    function endResize(): void {
+        if (!resizing) {
+            return;
+        }
+        void controller.setColumnWidth(resizing.key, resizing.width);
+        resizing = null;
+    }
 
     $: count = $items.length;
     $: overscan = 8;
@@ -151,21 +206,45 @@ the column list, a right-click on a row asks the screen for the actions menu.
         style="grid-template-columns: {template}; height: {rowHeight}px"
     >
         {#each active as { key, column } (key)}
-            <button
-                class="head"
-                role="columnheader"
-                class:sorted={$sort.column === key}
-                title={column ? columnTooltip(column, $notesMode) : key}
-                on:click={() => column && controller.sortBy(column)}
-                on:contextmenu={onHeaderContextMenu}
-            >
-                <span class="label">
-                    {column ? columnLabel(column, $notesMode) : key}
-                </span>
-                {#if $sort.column === key}
-                    <span class="arrow">{$sort.reverse ? "▼" : "▲"}</span>
-                {/if}
-            </button>
+            <!-- The handle is a sibling of the button, not a child: WebKit
+                 does not make a <button> the containing block for it. -->
+            <div class="head-cell">
+                <button
+                    class="head"
+                    role="columnheader"
+                    class:sorted={$sort.column === key}
+                    title={column ? columnTooltip(column, $notesMode) : key}
+                    on:click={() => column && controller.sortBy(column)}
+                    on:contextmenu={onHeaderContextMenu}
+                >
+                    <span class="label">
+                        {column ? columnLabel(column, $notesMode) : key}
+                    </span>
+                    {#if $sort.column === key}
+                        <span class="arrow">{$sort.reverse ? "▼" : "▲"}</span>
+                    {/if}
+                </button>
+                <!-- A focusable separator is the ARIA pattern for a resize handle. -->
+                <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+                <span
+                    class="resizer"
+                    class:active={resizing?.key === key}
+                    data-resize={key}
+                    role="separator"
+                    aria-orientation="vertical"
+                    aria-label="Resize column"
+                    aria-valuenow={columnWidth(key, $columnWidths)}
+                    tabindex="-1"
+                    on:pointerdown={(e) => startResize(e, key)}
+                    on:pointermove={moveResize}
+                    on:pointerup={endResize}
+                    on:pointercancel={endResize}
+                    on:click|stopPropagation
+                    on:keydown={(e) => nudgeResize(e, key)}
+                    on:dblclick|stopPropagation={() =>
+                        void controller.setColumnWidth(key, defaultColumnWidth(key))}
+                ></span>
+            </div>
         {/each}
     </div>
     <div class="body" style="height: {count * rowHeight}px">
@@ -288,6 +367,30 @@ the column list, a right-click on a row asks the screen for the actions menu.
     .head .arrow {
         font-size: 9px;
         color: var(--fg-subtle);
+    }
+    .head-cell {
+        position: relative;
+        display: flex;
+        min-width: 0;
+        overflow: hidden;
+    }
+    .head-cell .head {
+        flex: 1;
+        min-width: 0;
+    }
+    .resizer {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        inset-inline-end: 0;
+        width: 7px;
+        cursor: col-resize;
+        touch-action: none;
+    }
+    .resizer:hover,
+    .resizer.active {
+        background: var(--border-strong);
+        opacity: 0.6;
     }
     .body {
         position: relative;

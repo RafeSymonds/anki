@@ -131,6 +131,22 @@ the Qt recorder's file. macOS only grants the microphone to a process with
 embeds it into the bare binary's `__info_plist` section for `bin/anki start`
 and the tests. The e2e spec stubs `getUserMedia` with a synthetic tone.
 
+**Note type options.** Manage Note Types > Options edits the LaTeX header,
+footer and the dvisvgm flag (`OptionsDialog.svelte`, `latexOptions` /
+`setLatexOptions` in `notetypes.ts`), saved through `updateNotetype` like
+the Fields dialog.
+
+**Browser saved searches.** The sidebar's first section mirrors Qt's:
+saved searches live in the collection config key `savedFilters` (name to
+search text), so they sync with the collection and show up in the Qt app
+too. `BrowserController.saveSearch/renameSavedSearch/removeSavedSearch`
+return false when a name is taken so the screen can ask before overwriting.
+
+**Browser column widths.** Dragging the handle at a header's end resizes
+the column (arrow keys on a focused handle nudge it; double-click restores
+the default); widths live in the profile setting `browserColumnWidths` by
+column key (`columnTemplate` and friends in `columns.ts`).
+
 **Periodic work.** As main.py's timers: every five minutes the Rust side
 asks rslib for an unforced backup (`backup::periodic_loop`; rslib skips it
 until the configured interval has passed and the collection changed), and

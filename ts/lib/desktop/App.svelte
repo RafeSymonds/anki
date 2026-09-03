@@ -9,7 +9,7 @@ active.
 <script lang="ts">
     import type { DeckTreeNode } from "@generated/anki/decks_pb";
     import { SyncStatusResponse_Required } from "@generated/anki/sync_pb";
-    import { buildSearchString, redo, studiedToday, undo } from "@generated/backend";
+    import { buildSearchString, studiedToday } from "@generated/backend";
     import * as tr from "@generated/ftl";
     import { onDestroy, onMount } from "svelte";
 
@@ -46,6 +46,7 @@ active.
     import { installRpcDoneHook, isOperation, onRpcDone } from "./rpc-events";
     import RecorderDialog from "./RecorderDialog.svelte";
     import { installShellServices } from "./shell-services";
+    import { redoLast, undoLast } from "./undo";
     import { isTypingTarget, ShortcutMap } from "./shortcuts";
     import ToolHost, { type PageRequest } from "./tools/ToolHost.svelte";
     import { TOOL_SHORTCUTS } from "./tools/tools";
@@ -269,7 +270,11 @@ active.
     // wherever the user is (Ctrl+Z inside a text field stays text undo).
     async function menuUndo(): Promise<void> {
         try {
-            const result = await undo({}, { alertOnError: false });
+            const result = await undoLast();
+            if (result.kind === "nothing") {
+                showToast(tr.actionsNothingToUndo());
+                return;
+            }
             showToast(tr.undoUndoAction({ val: result.operation }));
         } catch {
             showToast(tr.actionsNothingToUndo());
@@ -281,7 +286,11 @@ active.
 
     async function menuRedo(): Promise<void> {
         try {
-            const result = await redo({}, { alertOnError: false });
+            const result = await redoLast();
+            if (result.kind === "nothing") {
+                showToast(tr.actionsNothingToRedo());
+                return;
+            }
             showToast(tr.undoRedoAction({ action: result.operation }));
         } catch {
             showToast(tr.actionsNothingToRedo());

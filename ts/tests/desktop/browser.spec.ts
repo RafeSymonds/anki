@@ -44,8 +44,9 @@ test.describe("browser", () => {
     test("searches, shows rows and selects into the editor", async ({ page }) => {
         await openBrowser(page, "deck:Default");
         const total = await totalFromStatus(page);
-        // The seed puts every second demo note into Default.
-        expect(total).toBeGreaterThanOrEqual(12);
+        // The seed puts every second demo note into Default; other specs
+        // (and the other engine's pass) may have removed or added a few.
+        expect(total).toBeGreaterThanOrEqual(8);
         await expect(rows(page)).toHaveCount(total);
         // Cells come from browserRowForId: the sort field shows the question
         // (which note comes first depends on the sort the last run left).
@@ -93,14 +94,17 @@ test.describe("browser", () => {
 
         await setMode(page, "notes");
         await expect(page.locator(".browser .status")).toContainText("notes selected");
-        await expect(rows(page)).toHaveCount(before);
+        // One row per note now; a note may have several cards.
+        const notes = await totalFromStatus(page);
+        expect(notes).toBeLessThanOrEqual(before);
+        await expect(rows(page)).toHaveCount(notes);
 
         await rows(page).first().click();
         await page.keyboard.press("Control+Delete");
-        await expect(page.locator(".browser .status")).toHaveText(statusPattern("\\d+", before - 1), {
+        await expect(page.locator(".browser .status")).toHaveText(statusPattern("\\d+", notes - 1), {
             timeout: 10_000,
         });
-        await expect(rows(page)).toHaveCount(before - 1);
+        await expect(rows(page)).toHaveCount(notes - 1);
         // The next row took over the selection.
         await expect(rows(page).first()).toHaveClass(/selected/);
     });
@@ -122,11 +126,13 @@ test.describe("browser", () => {
         await page.keyboard.press("Control+k");
         await expect(rowById).toHaveAttribute("data-color", "default", { timeout: 10_000 });
 
-        // Add Tags asks for the tags.
+        // Add Tags asks for the tags (a fresh tag: the suite passes over one
+        // collection twice).
+        const tag = `e2etag${Date.now() % 100000}`;
         const dialog = page.locator("form.dialog");
         await page.keyboard.press("Control+Shift+a");
         await expect(dialog).toBeVisible();
-        await dialog.locator("input[type=text]").fill("e2etag");
+        await dialog.locator("input[type=text]").fill(tag);
         await dialog.getByRole("button", { name: "OK" }).click();
         await expect(page.locator(".toast")).toContainText("note updated", { timeout: 10_000 });
 
@@ -155,7 +161,7 @@ test.describe("browser", () => {
 
         // The tag search finds the note.
         const input = page.locator(".browser input.search");
-        await input.fill("tag:e2etag");
+        await input.fill(`tag:${tag}`);
         await input.press("Enter");
         await expect(rows(page)).toHaveCount(1);
         expect(await rows(page).first().getAttribute("data-id")).toBe(id);
@@ -222,6 +228,55 @@ test.describe("browser", () => {
         await renamedEntry.hover();
         await renamedEntry.getByRole("button", { name: `Delete ${renamed}` }).click();
         await expect(renamedEntry).toHaveCount(0);
+    });
+
+    test("dragging a header's edge resizes the column and the width is remembered", async ({ page }) => {
+        await openBrowser(page, "deck:Default");
+        const cell = page.locator(".browser .head-cell", { hasText: "Sort Field" });
+        const head = cell.locator(".head");
+        const before = (await head.boundingBox())!;
+        const sortedBefore = await head.evaluate((el) => el.classList.contains("sorted"));
+        const handle = cell.locator(".resizer");
+        // A wide column (an earlier run may have stored one) puts the handle
+        // past the table's edge; the pointer must land on it.
+        await handle.scrollIntoViewIfNeeded();
+        const box = (await handle.boundingBox())!;
+        const x = box.x + 2;
+        const y = box.y + box.height / 2;
+        await page.mouse.move(x, y);
+        await page.mouse.down();
+        await page.mouse.move(x + 30, y, { steps: 3 });
+        await page.mouse.move(x + 80, y, { steps: 3 });
+        // Releasing stores the width; wait for that before leaving the page.
+        const stored = page.waitForResponse((r) => r.url().includes("/_desktop/settingsSet"));
+        await page.mouse.up();
+        await stored;
+        const after = (await head.boundingBox())!;
+        const storedWidths = await (
+            await page.request.post("/_desktop/settingsGet", {
+                data: JSON.stringify({ scope: "profile", key: "browserColumnWidths" }),
+            })
+        ).text();
+        expect(after.width - before.width).toBeGreaterThan(60);
+        // Dragging the handle is not a click on the header: the sort is as it was.
+        expect(await head.evaluate((el) => el.classList.contains("sorted"))).toBe(sortedBefore);
+
+        await page.goto("/");
+        await page.getByRole("button", { name: "Browse" }).click();
+        const againCell = page.locator(".browser .head-cell", { hasText: "Sort Field" });
+        const again = againCell.locator(".head");
+        await expect(again).toBeVisible();
+        await expect
+            .poll(async () => (await again.boundingBox())!.width, {
+                message: `reopened width should be ${after.width} (stored ${storedWidths})`,
+            })
+            .toBeCloseTo(after.width, 0);
+
+        // Double-click on the handle restores the default width
+        // (defaultColumnWidth("noteFld") in columns.ts), whatever it was before.
+        await againCell.locator(".resizer").scrollIntoViewIfNeeded();
+        await againCell.locator(".resizer").dblclick();
+        await expect.poll(async () => (await again.boundingBox())!.width).toBeCloseTo(320, 0);
     });
 
     test("sidebar items search and the sort header reorders", async ({ page }) => {

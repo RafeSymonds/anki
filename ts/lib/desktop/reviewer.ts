@@ -53,11 +53,12 @@ import {
     renderExistingCard,
     setFlag,
     stateIsLeech,
-    undo,
 } from "@generated/backend";
+
 import * as tr from "@generated/ftl";
 import type { Writable } from "svelte/store";
 import { get, writable } from "svelte/store";
+import { undoLast } from "./undo";
 
 import { avPlayer } from "./audio";
 import {
@@ -723,7 +724,10 @@ export class ReviewerController {
     /** Undo the last operation; returns its name, or null if nothing to undo. */
     async undo(): Promise<string | null> {
         try {
-            const result = await undo({}, { alertOnError: false });
+            const result = await undoLast();
+            if (result.kind === "nothing") {
+                return null;
+            }
             await this.refresh();
             return result.operation || null;
         } catch {

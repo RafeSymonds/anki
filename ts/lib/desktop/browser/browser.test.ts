@@ -22,9 +22,13 @@ function resetGate(): void {
 }
 resetGate();
 
+/** What settingsSet stored, by key. */
+const settings: Record<string, unknown> = {};
 vi.mock("../desktop-api", () => ({
-    settingsGet: async () => null,
-    settingsSet: async () => undefined,
+    settingsGet: async (_scope: string, key: string) => settings[key] ?? null,
+    settingsSet: async (_scope: string, key: string, value: unknown) => {
+        settings[key] = value;
+    },
 }));
 
 vi.mock("@generated/backend", () => {
@@ -87,6 +91,9 @@ describe("browser start-up", () => {
         searches.length = 0;
         for (const key of Object.keys(config)) {
             delete config[key];
+        }
+        for (const key of Object.keys(settings)) {
+            delete settings[key];
         }
         resetGate();
     });
@@ -157,5 +164,20 @@ describe("saved searches", () => {
         config.savedFilters = { good: "deck:A", bad: 7 };
         const controller = controllerWithoutSidebar();
         expect(await controller.savedSearches()).toEqual({ good: "deck:A" });
+    });
+});
+
+describe("column widths", () => {
+    it("loads stored widths on start and persists a drag", async () => {
+        settings.browserColumnWidths = { deck: 210, bogus: "x" };
+        const controller = controllerWithoutSidebar();
+        const started = controller.start(null);
+        releaseConfig();
+        await started;
+        expect(get(controller.columnWidths)).toEqual({ deck: 210 });
+
+        await controller.setColumnWidth("noteFld", 400);
+        expect(get(controller.columnWidths)).toEqual({ deck: 210, noteFld: 400 });
+        expect(settings.browserColumnWidths).toEqual({ deck: 210, noteFld: 400 });
     });
 });

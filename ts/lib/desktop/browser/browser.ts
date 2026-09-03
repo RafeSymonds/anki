@@ -58,20 +58,23 @@ import {
     setFlag,
     sortCards,
     tagTree,
-    undo,
 } from "@generated/backend";
+
 import * as tr from "@generated/ftl";
 import type { Writable } from "svelte/store";
 import { get, writable } from "svelte/store";
+import { undoLast } from "../undo";
 
 import { settingsGet, settingsSet } from "../desktop-api";
 import { MARKED_TAG, userFlag } from "../reviewer";
 import type { SortState } from "./columns";
 import {
     activeColumnsKey,
+    COLUMN_WIDTHS_KEY,
     defaultColumns,
     effectiveSort,
     FALLBACK_SORT_COLUMN,
+    sanitizeColumnWidths,
     sortAfterHeaderClick,
     sortBackwardsKey,
     sortColumnKey,
@@ -180,6 +183,8 @@ export class BrowserController {
     /** Short notices, e.g. "3 notes updated"; the screen replaces this with a toast. */
     notify: (message: string) => void = (message) => console.info(message);
 
+    /** Column widths the user dragged, by column key (profile setting). */
+    readonly columnWidths: Writable<Record<string, number>> = writable({});
     private lastSearch = "";
     private rows = new Map<bigint, RowData>();
     private inflight = new Map<bigint, Promise<RowData>>();
@@ -195,12 +200,14 @@ export class BrowserController {
     // Setup
     // ---
     async start(initialSearch: string | null = null): Promise<void> {
-        const [columns, notesMode, history] = await Promise.all([
+        const [columns, notesMode, history, widths] = await Promise.all([
             allBrowserColumns({}),
             this.configBool(ConfigKey_Bool.BROWSER_TABLE_SHOW_NOTES_MODE),
             settingsGet("profile", SEARCH_HISTORY_KEY).catch(() => null),
+            settingsGet("profile", COLUMN_WIDTHS_KEY).catch(() => null),
         ]);
         this.columns.set(columns.columns);
+        this.columnWidths.set(sanitizeColumnWidths(widths));
         this.notesMode.set(notesMode);
         this.history.set(Array.isArray(history) ? history.filter((s) => typeof s === "string") : []);
         await this.loadModeConfig(notesMode);
@@ -544,6 +551,17 @@ export class BrowserController {
         this.rows.clear();
         this.scheduleRedraw();
         void this.refreshCurrent();
+    }
+
+    /** Remember a dragged column width for this profile. */
+    async setColumnWidth(key: string, width: number): Promise<void> {
+        const widths = { ...get(this.columnWidths), [key]: width };
+        this.columnWidths.set(widths);
+        try {
+            await settingsSet("profile", COLUMN_WIDTHS_KEY, widths);
+        } catch {
+            // The settings store is optional in the browser-only harness.
+        }
     }
 
     // Saved searches (SidebarTreeView._save_search and friends)
@@ -1031,7 +1049,10 @@ export class BrowserController {
     /** Undo the last operation; returns its name, or null if nothing to undo. */
     async undo(): Promise<string | null> {
         try {
-            const result = await undo({}, { alertOnError: false });
+            const result = await undoLast();
+            if (result.kind === "nothing") {
+                return null;
+            }
             await this.search();
             return result.operation || null;
         } catch {
