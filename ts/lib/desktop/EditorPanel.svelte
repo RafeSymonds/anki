@@ -32,7 +32,11 @@ makes through FrontendService.
             return null;
         }
         const id = raw.id ? BigInt(raw.id) : 0n;
-        return { id: id || null, notetypeId: BigInt(raw.mid), fields: raw.fields ?? [] };
+        return {
+            id: id || null,
+            notetypeId: BigInt(raw.mid),
+            fields: raw.fields ?? [],
+        };
     }
 </script>
 

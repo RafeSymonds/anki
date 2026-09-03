@@ -20,6 +20,7 @@ export type ToolId =
     | "checkDatabase"
     | "checkMedia"
     | "emptyCards"
+    | "noteTypes"
     | "preferences";
 
 export interface ToolEntry {
@@ -38,6 +39,7 @@ export const TOOL_SHORTCUTS: [string, ToolId][] = [
     ["c", "customStudy"],
     ["f", "filteredDeck"],
     ["/", "studyDeck"],
+    ["Ctrl+Shift+n", "noteTypes"],
 ];
 
 export function shortcutFor(id: ToolId): string | undefined {
@@ -64,6 +66,7 @@ export function toolSections(): ToolEntry[][] {
             entry("emptyCards", `${tr.actionsEmptyCards()}…`),
         ],
         [
+            entry("noteTypes", tr.browsingManageNoteTypes()),
             entry("stats", tr.statisticsTitle()),
             entry("preferences", tr.preferencesPreferences()),
         ],

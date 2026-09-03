@@ -10,7 +10,11 @@ updateNotetype call.
 <script lang="ts">
     import type { AVTag } from "@generated/anki/card_rendering_pb";
     import type { Note } from "@generated/anki/notes_pb";
-    import type { Notetype, Notetype_Template, StockNotetype_Kind } from "@generated/anki/notetypes_pb";
+    import type {
+        Notetype,
+        Notetype_Template,
+        StockNotetype_Kind,
+    } from "@generated/anki/notetypes_pb";
     import {
         Notetype_Config,
         Notetype_Template_Config,
@@ -65,7 +69,11 @@ updateNotetype call.
     export let fillEmpty = false;
     export let nightMode = false;
 
-    const dispatch = createEventDispatcher<{ close: void; saved: void; notify: string }>();
+    const dispatch = createEventDispatcher<{
+        close: void;
+        saved: void;
+        notify: string;
+    }>();
 
     type Editor = "front" | "back" | "style";
 
@@ -85,12 +93,19 @@ updateNotetype call.
     let addFieldIndex = 0;
     let addFieldFont = "Arial";
     let addFieldSize = 20;
-    let appearance: { qfmt: string; afmt: string; override: boolean; font: { name: string; size: number } } | null = null;
+    let appearance: {
+        qfmt: string;
+        afmt: string;
+        override: boolean;
+        font: { name: string; size: number };
+    } | null = null;
     let stockChooser = false;
 
     $: cloze = notetype ? isCloze(notetype) : false;
     $: templates = notetype?.templates ?? [];
-    $: title = notetype ? withoutUnicodeIsolation(tr.cardTemplatesCardTypesFor({ val: notetype.name })) : "";
+    $: title = notetype
+        ? withoutUnicodeIsolation(tr.cardTemplatesCardTypesFor({ val: notetype.name }))
+        : "";
 
     function currentTemplate(): Notetype_Template {
         return cloze ? templates[0] : templates[ord];
@@ -116,7 +131,8 @@ updateNotetype call.
             }
         }
         const counts = await getNotetypeNamesAndCounts({});
-        useCount = counts.entries.find((entry) => entry.id === notetypeId)?.useCount ?? 0;
+        useCount =
+            counts.entries.find((entry) => entry.id === notetypeId)?.useCount ?? 0;
         if (isCloze(loaded)) {
             const numbers = [...(await clozeNumbersInNote(previewed)).numbers];
             if (!numbers.includes(ord + 1)) {
@@ -249,11 +265,17 @@ updateNotetype call.
         if (!notetype) {
             return;
         }
-        if (useCount && !confirm(tr.cardTemplatesThisWillCreateCardProceed({ count: useCount }))) {
+        if (
+            useCount &&
+            !confirm(tr.cardTemplatesThisWillCreateCardProceed({ count: useCount }))
+        ) {
             return;
         }
         const old = templateConfig();
-        addTemplate(notetype, newTemplate(newTemplateName(notetype), old.qFormat, old.aFormat));
+        addTemplate(
+            notetype,
+            newTemplate(newTemplateName(notetype), old.qFormat, old.aFormat),
+        );
         ord = notetype.templates.length - 1;
         changed = true;
         redrawEverything();
@@ -281,7 +303,9 @@ updateNotetype call.
             return;
         }
         const template = currentTemplate();
-        const cards = tr.cardTemplatesCardCount({ count: await templateUseCount(template) });
+        const cards = tr.cardTemplatesCardCount({
+            count: await templateUseCount(template),
+        });
         // The message takes the card count as a string ("3 cards").
         const message = tr.cardTemplatesDeleteTheAsCardTypeAnd({
             template: template.name,
@@ -305,7 +329,10 @@ updateNotetype call.
         }
         const template = currentTemplate();
         const text = prompt(tr.actionsNewName(), template.name);
-        if (text !== null && renameTemplate(notetype, templates.indexOf(template), text)) {
+        if (
+            text !== null &&
+            renameTemplate(notetype, templates.indexOf(template), text)
+        ) {
             changed = true;
             redrawEverything();
         }
@@ -319,12 +346,20 @@ updateNotetype call.
         const count = templates.length;
         const template = currentTemplate();
         const currentPos = templates.indexOf(template) + 1;
-        const text = prompt(tr.cardTemplatesEnterNewCardPosition1({ val: count }), String(currentPos));
+        const text = prompt(
+            tr.cardTemplatesEnterNewCardPosition1({ val: count }),
+            String(currentPos),
+        );
         if (!text) {
             return;
         }
         const position = Number(text);
-        if (!Number.isInteger(position) || position < 1 || position > count || position === currentPos) {
+        if (
+            !Number.isInteger(position) ||
+            position < 1 ||
+            position > count ||
+            position === currentPos
+        ) {
             return;
         }
         repositionTemplate(notetype, currentPos - 1, position - 1);
@@ -343,13 +378,17 @@ updateNotetype call.
         let current = "";
         if (config.targetDeckId) {
             try {
-                current = (await getDeck({ did: config.targetDeckId }, { alertOnError: false })).name;
+                current = (
+                    await getDeck({ did: config.targetDeckId }, { alertOnError: false })
+                ).name;
             } catch {
                 current = "";
             }
         }
         const text = prompt(
-            withoutUnicodeIsolation(tr.cardTemplatesEnterDeckToPlaceNew({ val: currentTemplate().name })),
+            withoutUnicodeIsolation(
+                tr.cardTemplatesEnterDeckToPlaceNew({ val: currentTemplate().name }),
+            ),
             current,
         );
         if (text === null) {
@@ -360,7 +399,9 @@ updateNotetype call.
             config.targetDeckId = 0n;
         } else {
             try {
-                config.targetDeckId = (await getDeckIdByName({ val: name }, { alertOnError: false })).did;
+                config.targetDeckId = (
+                    await getDeckIdByName({ val: name }, { alertOnError: false })
+                ).did;
             } catch {
                 config.targetDeckId = await createDeck(name);
             }
@@ -374,7 +415,9 @@ updateNotetype call.
         if (!notetype) {
             return;
         }
-        await navigator.clipboard.writeText(templateMarkdown(currentTemplate(), notetype.config!.css));
+        await navigator.clipboard.writeText(
+            templateMarkdown(currentTemplate(), notetype.config!.css),
+        );
         dispatch("notify", "Copied to clipboard");
     }
 
@@ -412,16 +455,25 @@ updateNotetype call.
         if (!notetype) {
             return;
         }
-        const unknown = (notetype.config?.originalStockKind ?? 0) === StockNotetype_OriginalStockKind.UNKNOWN;
+        const unknown =
+            (notetype.config?.originalStockKind ?? 0) ===
+            StockNotetype_OriginalStockKind.UNKNOWN;
         if (forceKind === undefined && unknown) {
             stockChooser = true;
             return;
         }
-        if (!confirm(withCollapsedWhitespace(tr.cardTemplatesRestoreToDefaultConfirmation()))) {
+        if (
+            !confirm(
+                withCollapsedWhitespace(tr.cardTemplatesRestoreToDefaultConfirmation()),
+            )
+        ) {
             return;
         }
         try {
-            await restoreNotetypeToStock({ notetypeId: { ntid: notetypeId }, forceKind });
+            await restoreNotetypeToStock({
+                notetypeId: { ntid: notetypeId },
+                forceKind,
+            });
         } catch {
             return;
         }
@@ -493,16 +545,14 @@ updateNotetype call.
         ["F3", () => selectTemplate(ord - 1)],
         ["F4", () => selectTemplate(ord + 1)],
         ["Ctrl+Return", () => void save()],
-        ...([1, 2, 3, 4, 5, 6, 7, 8, 9] as const).map(
-            (n): [string, () => void] => [
-                `Alt+${n}`,
-                () => {
-                    if (clozeNumbers[n - 1] !== undefined) {
-                        selectCloze(clozeNumbers[n - 1]);
-                    }
-                },
-            ],
-        ),
+        ...([1, 2, 3, 4, 5, 6, 7, 8, 9] as const).map((n): [string, () => void] => [
+            `Alt+${n}`,
+            () => {
+                if (clozeNumbers[n - 1] !== undefined) {
+                    selectCloze(clozeNumbers[n - 1]);
+                }
+            },
+        ]),
     ]);
 
     function onKey(event: KeyboardEvent): boolean {
@@ -525,21 +575,30 @@ updateNotetype call.
                     on:change={(e) => selectTemplate(Number(e.currentTarget.value))}
                 >
                     {#each templates as template, index (template)}
-                        <option value={index}>{templateSummary(index, template)}</option>
+                        <option value={index}>
+                            {templateSummary(index, template)}
+                        </option>
                     {/each}
                 </select>
                 <div class="menu-anchor">
-                    <button class="options-button" on:click={() => (menuOpen = !menuOpen)}>
+                    <button
+                        class="options-button"
+                        on:click={() => (menuOpen = !menuOpen)}
+                    >
                         {tr.actionsOptions()} ▾
                     </button>
                     {#if menuOpen}
                         <!-- svelte-ignore a11y-no-static-element-interactions -->
                         <div class="menu" on:mouseleave={() => (menuOpen = false)}>
                             <button on:click={() => restoreToDefault()}>
-                                {tr.actionsWithEllipsis({ action: tr.cardTemplatesRestoreToDefault() })}
+                                {tr.actionsWithEllipsis({
+                                    action: tr.cardTemplatesRestoreToDefault(),
+                                })}
                             </button>
                             {#if !cloze}
-                                <button on:click={addCardType}>{tr.cardTemplatesAddCardType()}</button>
+                                <button on:click={addCardType}>
+                                    {tr.cardTemplatesAddCardType()}
+                                </button>
                                 <button on:click={removeCardType}>
                                     {tr.cardTemplatesRemoveCardType()}
                                 </button>
@@ -557,7 +616,9 @@ updateNotetype call.
                                         : tr.cardTemplatesOff()}
                                 </button>
                             {/if}
-                            <button on:click={copyInfo}>{tr.cardTemplatesCopyInfo()}</button>
+                            <button on:click={copyInfo}>
+                                {tr.cardTemplatesCopyInfo()}
+                            </button>
                             <button on:click={openBrowserAppearance}>
                                 {tr.cardTemplatesBrowserAppearance()}
                             </button>
@@ -605,11 +666,15 @@ updateNotetype call.
                     ></textarea>
                     <div class="editor-footer">
                         <span class="affects">
-                            {tr.cardTemplatesChangesWillAffectNotes({ count: useCount })}
+                            {tr.cardTemplatesChangesWillAffectNotes({
+                                count: useCount,
+                            })}
                         </span>
                         <span class="spacer"></span>
                         {#if editor !== "style"}
-                            <button on:click={openAddField}>{tr.fieldsAddField()}</button>
+                            <button on:click={openAddField}>
+                                {tr.fieldsAddField()}
+                            </button>
                         {/if}
                         {#if !cloze}
                             <button on:click={flip}>{tr.cardTemplatesFlip()}</button>
@@ -641,10 +706,13 @@ updateNotetype call.
                             <select
                                 class="cloze-numbers"
                                 value={ord + 1}
-                                on:change={(e) => selectCloze(Number(e.currentTarget.value))}
+                                on:change={(e) =>
+                                    selectCloze(Number(e.currentTarget.value))}
                             >
                                 {#each clozeNumbers as number}
-                                    <option value={number}>{tr.cardTemplatesCard({ val: number })}</option>
+                                    <option value={number}>
+                                        {tr.cardTemplatesCard({ val: number })}
+                                    </option>
                                 {/each}
                             </select>
                         {/if}
@@ -668,14 +736,22 @@ updateNotetype call.
     {/if}
     <svelte:fragment slot="buttons">
         <button on:click={cancel}>{tr.actionsCancel()}</button>
-        <button class="primary" title={tr.actionsShortcutKey({ val: "⌘⏎" })} on:click={save}>
+        <button
+            class="primary"
+            title={tr.actionsShortcutKey({ val: "⌘⏎" })}
+            on:click={save}
+        >
             {tr.actionsSave()}
         </button>
     </svelte:fragment>
 </Modal>
 
 {#if addFieldOpen && notetype}
-    <Modal title={tr.fieldsAddField()} width="420px" on:close={() => (addFieldOpen = false)}>
+    <Modal
+        title={tr.fieldsAddField()}
+        width="420px"
+        on:close={() => (addFieldOpen = false)}
+    >
         <div class="form">
             <label>
                 <span>{tr.fieldsField()}</span>
@@ -695,14 +771,22 @@ updateNotetype call.
             </label>
         </div>
         <svelte:fragment slot="buttons">
-            <button on:click={() => (addFieldOpen = false)}>{tr.actionsCancel()}</button>
-            <button class="primary" on:click={addFieldToTemplate}>{tr.actionsAdd()}</button>
+            <button on:click={() => (addFieldOpen = false)}>
+                {tr.actionsCancel()}
+            </button>
+            <button class="primary" on:click={addFieldToTemplate}>
+                {tr.actionsAdd()}
+            </button>
         </svelte:fragment>
     </Modal>
 {/if}
 
 {#if appearance}
-    <Modal title={tr.cardTemplatesBrowserAppearance()} width="480px" on:close={() => (appearance = null)}>
+    <Modal
+        title={tr.cardTemplatesBrowserAppearance()}
+        width="480px"
+        on:close={() => (appearance = null)}
+    >
         <div class="form">
             <label>
                 <span>{tr.browsingOverrideFrontTemplate()}</span>
@@ -718,7 +802,11 @@ updateNotetype call.
             </label>
             <label>
                 <span>{tr.browsingFont()}</span>
-                <input type="text" disabled={!appearance.override} bind:value={appearance.font.name} />
+                <input
+                    type="text"
+                    disabled={!appearance.override}
+                    bind:value={appearance.font.name}
+                />
             </label>
             <label>
                 <span>{tr.browsingFontSize()}</span>
@@ -733,7 +821,9 @@ updateNotetype call.
         </div>
         <svelte:fragment slot="buttons">
             <button on:click={() => (appearance = null)}>{tr.actionsCancel()}</button>
-            <button class="primary" on:click={saveBrowserAppearance}>{tr.actionsSave()}</button>
+            <button class="primary" on:click={saveBrowserAppearance}>
+                {tr.actionsSave()}
+            </button>
         </svelte:fragment>
     </Modal>
 {/if}

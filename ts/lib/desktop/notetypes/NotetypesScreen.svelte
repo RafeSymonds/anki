@@ -8,7 +8,10 @@ note type or clones an existing one through the legacy JSON form, as
 add_notetype_legacy does.
 -->
 <script lang="ts">
-    import type { NotetypeNameIdUseCount, StockNotetype_Kind } from "@generated/anki/notetypes_pb";
+    import type {
+        NotetypeNameIdUseCount,
+        StockNotetype_Kind,
+    } from "@generated/anki/notetypes_pb";
     import {
         addNotetypeLegacy,
         getNotetype,
@@ -27,7 +30,11 @@ add_notetype_legacy does.
     /** Bumped by the parent after a dialog saved, to refresh the counts. */
     export let version = 0;
 
-    const dispatch = createEventDispatcher<{ fields: bigint; cards: bigint; notify: string }>();
+    const dispatch = createEventDispatcher<{
+        fields: bigint;
+        cards: bigint;
+        notify: string;
+    }>();
 
     type Source = { kind: StockNotetype_Kind } | { cloneId: bigint };
 
@@ -39,7 +46,9 @@ add_notetype_legacy does.
 
     async function refresh(select: bigint | null = selectedId): Promise<void> {
         rows = (await getNotetypeNamesAndCounts({})).entries;
-        selectedId = rows.some((row) => row.id === select) ? select : rows[0]?.id ?? null;
+        selectedId = rows.some((row) => row.id === select)
+            ? select
+            : (rows[0]?.id ?? null);
     }
 
     $: (version, void refresh());
@@ -74,16 +83,22 @@ add_notetype_legacy does.
         }
         let json: Record<string, unknown>;
         if ("kind" in source) {
-            json = decodeJson((await getStockNotetypeLegacy({ kind: source.kind })).json);
+            json = decodeJson(
+                (await getStockNotetypeLegacy({ kind: source.kind })).json,
+            );
         } else {
-            json = cloneNotetypeJson(decodeJson((await getNotetypeLegacy({ ntid: source.cloneId })).json));
+            json = cloneNotetypeJson(
+                decodeJson((await getNotetypeLegacy({ ntid: source.cloneId })).json),
+            );
         }
         const text = prompt(tr.actionsName(), String(json.name ?? ""));
         if (!text?.trim()) {
             return;
         }
         json.name = ensureNameUnique(text, rows, 0n);
-        const added = await addNotetypeLegacy({ json: encoder.encode(JSON.stringify(json)) });
+        const added = await addNotetypeLegacy({
+            json: encoder.encode(JSON.stringify(json)),
+        });
         await refresh(added.id);
     }
 
@@ -134,7 +149,9 @@ add_notetype_legacy does.
                 on:dblclick={onRename}
             >
                 <span class="name">{row.name}</span>
-                <span class="count">[{tr.browsingNoteCount({ count: row.useCount })}]</span>
+                <span class="count">
+                    [{tr.browsingNoteCount({ count: row.useCount })}]
+                </span>
             </div>
         {/each}
     </div>
@@ -143,10 +160,16 @@ add_notetype_legacy does.
         <button disabled={!selected} on:click={onRename}>{tr.actionsRename()}</button>
         <button disabled={!selected} on:click={onDelete}>{tr.actionsDelete()}</button>
         <div class="gap"></div>
-        <button disabled={!selected} on:click={() => selected && dispatch("fields", selected.id)}>
+        <button
+            disabled={!selected}
+            on:click={() => selected && dispatch("fields", selected.id)}
+        >
             {tr.notetypesFields()}
         </button>
-        <button disabled={!selected} on:click={() => selected && dispatch("cards", selected.id)}>
+        <button
+            disabled={!selected}
+            on:click={() => selected && dispatch("cards", selected.id)}
+        >
             {tr.notetypesCards()}
         </button>
     </div>

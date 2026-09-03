@@ -27,7 +27,6 @@ active.
     import DeckSidebar from "./DeckSidebar.svelte";
     import EditorPanel, { editorNoteInfo } from "./EditorPanel.svelte";
     import { reopenCollection, settingsGet, settingsSet } from "./desktop-api";
-    import EditorPanel from "./EditorPanel.svelte";
     import EmbeddedPage from "./EmbeddedPage.svelte";
     import { installFrontendService } from "./frontend-service";
     import NotetypeDialogs from "./notetypes/NotetypeDialogs.svelte";
@@ -67,7 +66,6 @@ active.
     let toastTimer: ReturnType<typeof setTimeout> | undefined;
     let notetypeDialogs: NotetypeDialogs;
     let notetypesVersion = 0;
-    let toolsOpen = false;
     let refreshTimer: ReturnType<typeof setTimeout> | undefined;
     const controller = new ReviewerController();
 
@@ -189,7 +187,6 @@ active.
     // Note types: the list screen, and the dialogs the editor's
     // Fields.../Cards... buttons open for the note it is showing.
     function openNotetypes(): void {
-        toolsOpen = false;
         screen = { kind: "notetypes" };
     }
 
@@ -207,7 +204,7 @@ active.
                 notetypeId: info.notetypeId,
                 noteId: info.id,
                 fields: info.fields,
-                ord: screen.kind === "review" ? controller.card?.templateIdx ?? 0 : 0,
+                ord: screen.kind === "review" ? (controller.card?.templateIdx ?? 0) : 0,
                 fillEmpty: false,
             });
         }
@@ -276,7 +273,6 @@ active.
             },
         ],
         ["a", () => openAdd()],
-        ["Ctrl+Shift+n", () => openNotetypes()],
         ...TOOL_SHORTCUTS.map(([spec, id]): [string, () => void] => [
             spec,
             () => void tools?.run(id),
@@ -412,20 +408,6 @@ active.
                 </span>
             {/if}
             <span class="spacer"></span>
-            <div class="menu-anchor">
-                <button class="tool" on:click={() => (toolsOpen = !toolsOpen)}>
-                    Tools ▾
-                </button>
-                {#if toolsOpen}
-                    <!-- svelte-ignore a11y-no-static-element-interactions -->
-                    <div class="menu" on:mouseleave={() => (toolsOpen = false)}>
-                        <button on:click={openNotetypes}>
-                            {tr.browsingManageNoteTypes()}
-                            <kbd>⌘⇧N</kbd>
-                        </button>
-                    </div>
-                {/if}
-            </div>
             {#if screen.kind !== "add"}
                 <button
                     class="tool"
@@ -443,6 +425,7 @@ active.
                 {tr.statisticsTitle()}
             </button>
             <ToolsMenu on:action={(e) => tools?.run(e.detail)} />
+            <button
                 class="tool sync"
                 class:normal-sync={$syncStatus ===
                     SyncStatusResponse_Required.NORMAL_SYNC}
@@ -508,6 +491,7 @@ active.
         </div>
 
         <ToolHost
+            on:noteTypes={openNotetypes}
             bind:this={tools}
             deckId={currentDeckId}
             deckName={rows.find((r) => r.id === currentDeckId)?.name ?? ""}
@@ -621,44 +605,6 @@ active.
         flex: 1;
         min-height: 0;
         overflow: auto;
-    }
-    .menu-anchor {
-        position: relative;
-    }
-    .menu {
-        position: absolute;
-        right: 0;
-        top: calc(100% + 4px);
-        min-width: 220px;
-        background: var(--canvas-elevated);
-        border: 1px solid var(--border);
-        border-radius: var(--border-radius);
-        box-shadow: var(--shadow);
-        padding: 4px;
-        display: flex;
-        flex-direction: column;
-        z-index: 20;
-    }
-    .menu button {
-        font: inherit;
-        color: var(--fg);
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 12px;
-        text-align: start;
-        border: 0;
-        background: transparent;
-        padding: 6px 10px;
-        cursor: pointer;
-    }
-    .menu button:hover {
-        background: var(--highlight-bg);
-        color: var(--highlight-fg);
-    }
-    .menu kbd {
-        font-size: 11px;
-        color: var(--fg-subtle);
     }
     .toast {
         position: absolute;

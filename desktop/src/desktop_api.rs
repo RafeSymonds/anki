@@ -116,7 +116,6 @@ pub fn handle(state: &AppState, cmd: &str, body: &[u8]) -> Reply {
         "profilePaths" => {
             result(profile_paths(state).map(|p| serde_json::to_value(p).expect("json")))
         }
-        "reopenCollection" => result(reopen_collection(state).map(|_| Value::Null)),
         "importCollectionPackage" => match serde_json::from_slice::<ImportCollection>(body) {
             Ok(req) => result(import_collection_package(state, &req.path).map(|_| Value::Null)),
             Err(err) => text(StatusCode::BAD_REQUEST, err.to_string()),
@@ -291,14 +290,6 @@ fn profile_paths(state: &AppState) -> Result<ProfilePaths, String> {
         profile_dir: dir.to_string_lossy().into_owned(),
         backup_folder: backups.to_string_lossy().into_owned(),
     })
-}
-
-/// `mw.reopen()`: exporting a .colpkg leaves the collection closed.
-fn reopen_collection(state: &AppState) -> Result<(), String> {
-    let dir = profile_dir(state)?;
-    // Closing an already closed collection is an error we can ignore.
-    let _ = crate::profile::close_collection(&state.backend);
-    crate::profile::open_collection(&state.backend, &dir).map_err(|err| format!("{err:#}"))
 }
 
 /// ColpkgImporter._import: the backend needs the collection closed while it

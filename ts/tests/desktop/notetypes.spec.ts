@@ -15,7 +15,7 @@ async function openNoteTypes(page: Page): Promise<void> {
     await page.goto("/");
     await expect(page.getByRole("button", { name: "Study Now" })).toBeVisible();
     await page.getByRole("button", { name: /Tools/ }).click();
-    await page.getByRole("button", { name: "Manage Note Types" }).click();
+    await page.getByRole("menuitem", { name: /Manage Note Types/ }).click();
     await expect(page.locator(".notetypes .row", { hasText: "Basic" }).first()).toBeVisible();
 }
 

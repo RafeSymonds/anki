@@ -39,6 +39,7 @@ and report through a notice.
     export let deckName = "";
 
     const dispatch = createEventDispatcher<{
+        noteTypes: void;
         /** Embed a SvelteKit route. */
         page: PageRequest;
         /** The collection changed; the current deck may have too. */
@@ -171,6 +172,9 @@ and report through a notice.
                 break;
             case "emptyCards":
                 await emptyCards();
+                break;
+            case "noteTypes":
+                dispatch("noteTypes");
                 break;
         }
     }

@@ -58,7 +58,8 @@ direct routes to the deck options and to studying more.
             } else if (command === "unbury") {
                 void unbury();
             }
-        }));
+        }),
+    );
     onDestroy(() => removeBridgeHandler(window));
 
     let deck: Deck | null = null;

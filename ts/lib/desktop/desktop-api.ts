@@ -96,11 +96,6 @@ export async function profilePaths(): Promise<ProfilePaths> {
     return { profileDir: result.profile_dir, backupFolder: result.backup_folder };
 }
 
-/** Open the collection again after a call that closed it (exporting a .colpkg). */
-export async function reopenCollection(): Promise<void> {
-    await post("reopenCollection", "");
-}
-
 /** Replace the collection with a .colpkg: close, import, reopen (ColpkgImporter._import). */
 export async function importCollectionPackage(path: string): Promise<void> {
     await post("importCollectionPackage", JSON.stringify({ path }));

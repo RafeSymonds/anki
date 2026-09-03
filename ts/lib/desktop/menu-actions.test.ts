@@ -16,7 +16,11 @@ describe("menu actions", () => {
     it("runs the matching handler and reports the rest", () => {
         const ran: string[] = [];
         const missing: string[] = [];
-        const handlers = { sync: () => ran.push("sync") };
+        const handlers = {
+            sync: () => {
+                ran.push("sync");
+            },
+        };
         expect(dispatchMenu("sync", handlers, (id) => missing.push(id))).toBe(true);
         expect(dispatchMenu("stats", handlers, (id) => missing.push(id))).toBe(false);
         expect(dispatchMenu("bogus", handlers, (id) => missing.push(id))).toBe(false);

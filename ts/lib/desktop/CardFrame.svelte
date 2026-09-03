@@ -65,7 +65,8 @@ JS, so keeping them in their own document keeps them out of the shell.
         showQuestion: (question, answer, bodyClass) =>
             whenReady(() => win()?._showQuestion(question, answer, bodyClass)),
         showAnswer: (answer) => whenReady(() => win()?._showAnswer(answer, "")),
-        showPreview: (html, bodyClass) => whenReady(() => win()?._showAnswer(html, bodyClass)),
+        showPreview: (html, bodyClass) =>
+            whenReady(() => win()?._showAnswer(html, bodyClass)),
         drawFlag: (flag) => whenReady(() => win()?._drawFlag(flag)),
         drawMark: (marked) => whenReady(() => win()?._drawMark(marked)),
         getTypedAnswer: () => win()?.getTypedAnswer?.() ?? null,
