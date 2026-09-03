@@ -47,6 +47,7 @@ pub const ITEMS: &[(&str, &str, Option<&str>)] = &[
     ("check_media", "Check Media…", None),
     ("empty_cards", "Empty Cards…", None),
     ("create_backup", "Create Backup", None),
+    ("getting_started", "Getting Started…", None),
     ("guide", "Guide…", Some("F1")),
     ("support", "Support Anki…", None),
     ("quit", "Quit Anki", Some("CmdOrCtrl+Q")),
@@ -151,7 +152,11 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         app,
         "Help",
         true,
-        &[&item(app, "guide")?, &item(app, "support")?],
+        &[
+            &item(app, "getting_started")?,
+            &item(app, "guide")?,
+            &item(app, "support")?,
+        ],
     )?;
     Menu::with_items(app, &[&app_menu, &file, &edit, &go, &tools, &window, &help])
 }

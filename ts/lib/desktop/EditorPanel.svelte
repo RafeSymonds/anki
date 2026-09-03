@@ -153,12 +153,13 @@ makes through FrontendService.
         const args = {
             nid: noteId?.toString() ?? null,
             notetypeId,
-            focusTo: 0,
+            focusTo: pendingFocus ?? 0,
             originalNoteId: null,
             reviewerCardId: cardId?.toString() ?? null,
             deckId: deckId?.toString() ?? null,
             initial: true,
         };
+        pendingFocus = null;
         w.require("anki/ui").loaded.then(() => w.loadNote(args));
     }
 
@@ -245,6 +246,17 @@ makes through FrontendService.
      * webview.py's on_operation_did_execute tells the page. */
     function onNotetypeChanged(): void {
         win()?.anki?.onOperationDidExecute?.({ notetype: true, noteText: true });
+    }
+
+    /** Put the caret in field `index`, now or once the note has loaded. */
+    let pendingFocus: number | null = null;
+    export function focusField(index: number): void {
+        const w = win();
+        if (ready && loadedNote === noteId && w?.focusField) {
+            w.focusField(index);
+        } else {
+            pendingFocus = index;
+        }
     }
 
     /** Flush pending field edits; resolves once the editor reports "saved". */

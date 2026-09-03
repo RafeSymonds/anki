@@ -31,6 +31,7 @@ test("a collection with no cards shows the welcome panel and leads to adding", a
     await page.goto("/");
     await expect(page.getByRole("heading", { name: "Welcome to Anki" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Study Now" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /getting started guide/ })).toBeVisible();
 
     await page.getByRole("button", { name: /Make your first cards/ }).click();
     const editor = page.frameLocator("iframe[title=editor]");

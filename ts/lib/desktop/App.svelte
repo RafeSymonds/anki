@@ -45,6 +45,7 @@ active.
     import { ReviewerController } from "./reviewer";
     import { installRpcDoneHook, isOperation, onRpcDone } from "./rpc-events";
     import RecorderDialog from "./RecorderDialog.svelte";
+    import { GETTING_STARTED_URL } from "./links";
     import { installShellServices } from "./shell-services";
     import { redoLast, undoLast } from "./undo";
     import { isTypingTarget, ShortcutMap } from "./shortcuts";
@@ -343,6 +344,7 @@ active.
                 check_media: () => tools?.run("checkMedia"),
                 empty_cards: () => tools?.run("emptyCards"),
                 create_backup: () => tools?.run("createBackup"),
+                getting_started: () => void openLink(GETTING_STARTED_URL),
                 guide: () => void openLink("https://docs.ankiweb.net/"),
                 support: () => void openLink("https://faqs.ankiweb.net/"),
                 quit: beforeQuit,

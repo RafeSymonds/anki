@@ -10,6 +10,7 @@ sentences and the three ways to get cards.
     import { createEventDispatcher } from "svelte";
 
     import { openLink } from "./desktop-api";
+    import { GETTING_STARTED_URL } from "./links";
 
     const dispatch = createEventDispatcher<{ add: void; import: void }>();
 
@@ -39,6 +40,15 @@ sentences and the three ways to get cards.
             </span>
         </button>
     </div>
+    <p class="more">
+        New to spaced repetition?
+        <a
+            href={GETTING_STARTED_URL}
+            on:click|preventDefault={() => void openLink(GETTING_STARTED_URL)}
+        >
+            Read the getting started guide
+        </a>
+    </p>
 </div>
 
 <style>
@@ -89,5 +99,13 @@ sentences and the three ways to get cards.
     .hint {
         font-size: 13px;
         color: var(--fg-subtle);
+    }
+    .more {
+        margin: 20px 0 0;
+        font-size: 13px;
+        color: var(--fg-subtle);
+    }
+    .more a {
+        color: var(--fg-link);
     }
 </style>

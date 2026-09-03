@@ -7,10 +7,12 @@ four rating buttons with their intervals, the remaining counts, the timer,
 Edit, Undo and the card actions menu.
 -->
 <script lang="ts">
+    import { getNote } from "@generated/backend";
     import * as tr from "@generated/ftl";
-    import { createEventDispatcher, onDestroy, onMount } from "svelte";
+    import { createEventDispatcher, onDestroy, onMount, tick } from "svelte";
 
     import CardFrame from "./CardFrame.svelte";
+    import { fieldIndexForText } from "./click-to-edit";
     import { settingsGet, settingsSet } from "./desktop-api";
     import EditorPanel from "./EditorPanel.svelte";
     import { FIRST_CARD_GUIDE_KEY, guideNeeded } from "./first-card";
@@ -134,6 +136,22 @@ Edit, Undo and the card actions menu.
         return false;
     }
 
+    /** A click on card text opens the edit panel on that field (A7). */
+    async function onCardClick(text: string): Promise<void> {
+        const card = $currentCard;
+        if (!card) {
+            return;
+        }
+        const note = await getNote({ nid: card.noteId });
+        const index = fieldIndexForText(note.fields, text);
+        if (index === null) {
+            return;
+        }
+        editing = true;
+        await tick();
+        editor?.focusField(index);
+    }
+
     function toggleEditing(): void {
         if (editing) {
             void closeEditor();
@@ -217,6 +235,7 @@ Edit, Undo and the card actions menu.
                 {nightMode}
                 onCommand={(command) => controller.onBridgeCommand(command)}
                 onKeydown={(event) => handleKey(event)}
+                onClick={(text) => void onCardClick(text)}
             />
             {#if $notice}
                 <div class="notice">{$notice}</div>

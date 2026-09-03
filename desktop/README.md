@@ -131,12 +131,24 @@ the Qt recorder's file. macOS only grants the microphone to a process with
 embeds it into the bare binary's `__info_plist` section for `bin/anki start`
 and the tests. The e2e spec stubs `getUserMedia` with a synthetic tone.
 
+**Deck options essentials.** In the Essentials view each essential setting
+carries one line of consequence (`ts/routes/deck-options/consequences.ts`: a
+rule-of-thumb review estimate, the review-limit check, forgotten cards per
+hundred) and the first sentence of its help inline; the Advanced view keeps
+the compact layout. The view flag travels by Svelte context.
+
 **Kind of card.** Above the Add editor, a picker offers Basic, Both
 directions and Fill in the blank (`notetype-kinds.ts` maps them to the stock
 note types by name; a renamed one drops out) and "More types…" opens the
 editor's own chooser. The picker calls `setNotetype` on the editor window,
 an export added to NoteEditor.svelte for the shell. Adding a cloze note with
 no blank first says how to make one, then asks as before.
+
+**Click to edit.** On the card, clicking a piece of text opens the edit
+panel on the field it came from: `CardFrame` reports the clicked element's
+text (controls excluded) and `click-to-edit.ts` matches it against the
+note's fields. Help > Getting Started and the welcome panel link to the
+manual's first chapter (`links.ts`).
 
 **Live preview.** The Preview toggle in the same bar shows the first card
 the note will make (`AddPreview.svelte`, question and answer through

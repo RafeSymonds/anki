@@ -26,6 +26,7 @@ export const MENU_IDS = [
     "check_media",
     "empty_cards",
     "create_backup",
+    "getting_started",
     "guide",
     "support",
     "quit",

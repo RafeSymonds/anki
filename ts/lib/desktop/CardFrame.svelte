@@ -9,10 +9,13 @@ JS, so keeping them in their own document keeps them out of the shell.
 -->
 <script lang="ts">
     import { installBridgeHandler } from "./bridge";
+    import { isInteractiveTarget } from "./click-to-edit";
     import type { CardView } from "./reviewer";
 
     export let onCommand: (command: string) => void;
     export let onKeydown: (event: KeyboardEvent) => void;
+    /** A click on card text, with that element's text (controls excluded). */
+    export let onClick: ((text: string) => void) | null = null;
     export let nightMode = false;
 
     /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -24,6 +27,32 @@ JS, so keeping them in their own document keeps them out of the shell.
 
     function win(): CardWindow | null {
         return (frame?.contentWindow as CardWindow | null) ?? null;
+    }
+
+    /** The text node under (x, y), if the point lies on its glyphs. */
+    function textUnderPoint(doc: Document, x: number, y: number): string {
+        const caret = (
+            doc as Document & {
+                caretRangeFromPoint?: (x: number, y: number) => Range | null;
+            }
+        ).caretRangeFromPoint?.(x, y);
+        const node = caret?.startContainer;
+        if (!node || node.nodeType !== Node.TEXT_NODE || !node.textContent?.trim()) {
+            return "";
+        }
+        const range = doc.createRange();
+        range.selectNodeContents(node);
+        for (const rect of Array.from(range.getClientRects())) {
+            if (
+                x >= rect.left - 2 &&
+                x <= rect.right + 2 &&
+                y >= rect.top - 2 &&
+                y <= rect.bottom + 2
+            ) {
+                return node.textContent ?? "";
+            }
+        }
+        return "";
     }
 
     function whenReady(fn: () => void): void {
@@ -52,6 +81,28 @@ JS, so keeping them in their own document keeps them out of the shell.
         }
         installBridgeHandler(w, (command) => onCommand(command));
         w.document.addEventListener("keydown", (event) => onKeydown(event));
+        w.document.addEventListener("click", (event) => {
+            const element = event.target as Element | null;
+            if (!element || !onClick) {
+                return;
+            }
+            const ancestors: string[] = [];
+            for (let el = element.parentElement; el; el = el.parentElement) {
+                ancestors.push(el.tagName);
+            }
+            if (
+                isInteractiveTarget(element.tagName, ancestors) ||
+                element.closest("[contenteditable], .replay-button")
+            ) {
+                return;
+            }
+            // Card text is often a bare text node inside the container, so
+            // take the text under the pointer rather than the target's text.
+            const text = textUnderPoint(w.document, event.clientX, event.clientY);
+            if (text) {
+                onClick(text);
+            }
+        });
         applyTheme();
         ready = true;
         const queued = pending;

@@ -8,6 +8,34 @@ function editorFrame(page: Page): FrameLocator {
 }
 
 /** The contenteditable for a field inside the editor frame (see ts/tests/e2e/helpers.ts). */
+/** Click the glyphs of the first text node in the card matching `pattern`. */
+async function clickCardText(card: Locator, pattern: RegExp): Promise<void> {
+    const position = await card.evaluate((qa, source) => {
+        const regex = new RegExp(source);
+        const walker = qa.ownerDocument.createTreeWalker(qa, NodeFilter.SHOW_TEXT);
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+            if (node.parentElement?.tagName === "STYLE" || !regex.test(node.textContent ?? "")) {
+                continue;
+            }
+            const range = qa.ownerDocument.createRange();
+            range.selectNodeContents(node);
+            const rect = range.getClientRects()[0];
+            const box = qa.getBoundingClientRect();
+            if (rect) {
+                return {
+                    x: rect.left - box.left + Math.min(rect.width / 2, 20),
+                    y: rect.top - box.top + rect.height / 2,
+                };
+            }
+        }
+        return null;
+    }, pattern.source);
+    if (!position) {
+        throw new Error(`no card text matching ${pattern}`);
+    }
+    await card.click({ position });
+}
+
 function fieldLabel(editor: FrameLocator, index: number): Locator {
     return editor.locator(`.field-container[data-index="${index}"]`).locator(".label-name");
 }
@@ -54,6 +82,28 @@ test.describe("adding and editing notes", () => {
 
         await page.getByRole("button", { name: /Close/ }).click();
         await expect(page.getByRole("button", { name: "Study Now" })).toBeVisible();
+    });
+
+    test("clicking text on the card opens the edit panel on that field", async ({ page }) => {
+        await page.goto("/");
+        await page.locator("nav.sidebar .row", { hasText: "Default" }).click();
+        await page.getByRole("button", { name: "Study Now" }).click();
+        const card = page.frameLocator("iframe[title=card]").locator("#qa");
+        await expect(card).toContainText("What is the capital of country");
+        await page.locator("button.show-answer").click();
+        await expect(card).toContainText("City");
+
+        // The answer text comes from the second field.
+        await clickCardText(card, /City \d+/);
+        const editor = editorFrame(page);
+        await expect(editor.locator(".field-container").first()).toBeVisible({ timeout: 20_000 });
+        await expect(editableField(editor, 1)).toBeFocused({ timeout: 10_000 });
+
+        // Clicking the question text moves to the first field.
+        await clickCardText(card, /What is the capital/);
+        await expect(editableField(editor, 0)).toBeFocused({ timeout: 10_000 });
+        await page.keyboard.press("Escape");
+        await expect(page.locator("iframe[title=editor]")).toHaveCount(0);
     });
 
     test("the kind picker switches between basic, both directions and fill in the blank", async ({ page }) => {
