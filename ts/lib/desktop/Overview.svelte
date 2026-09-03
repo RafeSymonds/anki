@@ -13,15 +13,18 @@ direct routes to the deck options and to studying more.
     import { UnburyDeckRequest_Mode } from "@generated/anki/scheduler_pb";
     import {
         congratsInfo,
+        emptyFilteredDeck,
         getDeck,
         getQueuedCards,
+        rebuildFilteredDeck,
         renderMarkdown,
         unburyDeck,
     } from "@generated/backend";
     import * as tr from "@generated/ftl";
-    import { createEventDispatcher } from "svelte";
+    import { createEventDispatcher, onDestroy, onMount } from "svelte";
 
     import CongratsPage from "../../routes/congrats/CongratsPage.svelte";
+    import { installBridgeHandler, removeBridgeHandler } from "./bridge";
     import { findNode } from "./decks";
 
     export let deckId: bigint;
@@ -33,7 +36,30 @@ direct routes to the deck options and to studying more.
         study: void;
         options: bigint;
         changed: void;
+        customStudy: void;
     }>();
+
+    /** Rebuild / Empty for filtered decks (overview.py _link_handler). */
+    async function rebuild(): Promise<void> {
+        await rebuildFilteredDeck({ did: deckId });
+        dispatch("changed");
+    }
+
+    async function empty(): Promise<void> {
+        await emptyFilteredDeck({ did: deckId });
+        dispatch("changed");
+    }
+
+    // The congrats page's links (bridgeLink) call bridgeCommand in this window.
+    onMount(() =>
+        installBridgeHandler(window, (command) => {
+            if (command === "customStudy") {
+                dispatch("customStudy");
+            } else if (command === "unbury") {
+                void unbury();
+            }
+        }));
+    onDestroy(() => removeBridgeHandler(window));
 
     let deck: Deck | null = null;
     let node: DeckTreeNode | undefined;
@@ -117,6 +143,10 @@ direct routes to the deck options and to studying more.
                     <button on:click={() => dispatch("options", deckId)}>
                         {tr.actionsOptions()}
                     </button>
+                    {#if deck.kind.case === "filtered"}
+                        <button on:click={rebuild}>{tr.actionsRebuild()}</button>
+                        <button on:click={empty}>{tr.studyingEmpty()}</button>
+                    {/if}
                     {#if info.haveSchedBuried || info.haveUserBuried}
                         <button on:click={unbury}>{tr.studyingUnbury()}</button>
                     {/if}
@@ -176,6 +206,17 @@ direct routes to the deck options and to studying more.
                 >
                     {tr.actionsOptions()}
                 </button>
+                {#if deck.kind.case === "filtered"}
+                    <button on:click={rebuild}>{tr.actionsRebuild()}</button>
+                    <button on:click={empty}>{tr.studyingEmpty()}</button>
+                {:else}
+                    <button
+                        title={tr.actionsShortcutKey({ val: "C" })}
+                        on:click={() => dispatch("customStudy")}
+                    >
+                        {tr.actionsCustomStudy()}
+                    </button>
+                {/if}
                 {#if buried.some((n) => n !== 0)}
                     <button
                         title={tr.actionsShortcutKey({ val: "U" })}

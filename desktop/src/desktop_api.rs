@@ -6,6 +6,7 @@
 //! the operating system rather than rslib: opening links and files, native
 //! dialogs, and the shell's own settings store.
 
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::mpsc;
 
@@ -48,6 +49,29 @@ struct FilePicked {
     path: String,
 }
 
+#[derive(Debug, Deserialize, Default)]
+struct FileSave {
+    #[serde(default)]
+    title: String,
+    #[serde(default)]
+    filter_description: String,
+    #[serde(default)]
+    extensions: Vec<String>,
+    #[serde(default)]
+    default_name: String,
+}
+
+#[derive(Debug, Serialize)]
+struct ProfilePaths {
+    profile_dir: String,
+    backup_folder: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct ImportCollection {
+    path: String,
+}
+
 pub fn handle(state: &AppState, cmd: &str, body: &[u8]) -> Reply {
     match cmd {
         "openLink" => {
@@ -79,6 +103,21 @@ pub fn handle(state: &AppState, cmd: &str, body: &[u8]) -> Reply {
                 .unwrap_or_default();
             json(serde_json::to_value(FilePicked { path }).expect("json"))
         }
+        "saveFilePicker" => {
+            let req: FileSave = serde_json::from_slice(body).unwrap_or_default();
+            let path = save_file(state, &req)
+                .map(|p| p.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            json(serde_json::to_value(FilePicked { path }).expect("json"))
+        }
+        "profilePaths" => {
+            result(profile_paths(state).map(|p| serde_json::to_value(p).expect("json")))
+        }
+        "reopenCollection" => result(reopen_collection(state).map(|_| Value::Null)),
+        "importCollectionPackage" => match serde_json::from_slice::<ImportCollection>(body) {
+            Ok(req) => result(import_collection_package(state, &req.path).map(|_| Value::Null)),
+            Err(err) => text(StatusCode::BAD_REQUEST, err.to_string()),
+        },
         _ => text(
             StatusCode::NOT_FOUND,
             format!("unknown desktop command: {cmd}"),
@@ -179,9 +218,142 @@ fn pick_file(state: &AppState, req: &FilePick) -> Option<PathBuf> {
     rx.recv().ok().flatten()
 }
 
+/// Tests answer a dialog through an environment variable: unset means show
+/// the dialog, empty means the user cancelled, anything else is the path.
+fn env_answer(var: &str) -> Option<Option<PathBuf>> {
+    let value = std::env::var(var).ok()?;
+    Some(if value.is_empty() {
+        None
+    } else {
+        Some(PathBuf::from(value))
+    })
+}
+
+/// Show a native save-file dialog, the counterpart of `pick_file`. Tests set
+/// `ANKI_TEST_FILE_SAVE` to answer without a dialog.
+fn save_file(state: &AppState, req: &FileSave) -> Option<PathBuf> {
+    if let Some(answer) = env_answer("ANKI_TEST_FILE_SAVE") {
+        return answer;
+    }
+    let title = req.title.clone();
+    let description = if req.filter_description.is_empty() {
+        "Files".to_string()
+    } else {
+        req.filter_description.clone()
+    };
+    let extensions: Vec<String> = req
+        .extensions
+        .iter()
+        .map(|e| e.trim_start_matches('.').to_string())
+        .collect();
+    let default_name = req.default_name.clone();
+    let show = move || {
+        let mut dialog = rfd::FileDialog::new().set_title(&title);
+        if !extensions.is_empty() {
+            dialog = dialog.add_filter(&description, &extensions);
+        }
+        if !default_name.is_empty() {
+            dialog = dialog.set_file_name(&default_name);
+        }
+        dialog.save_file()
+    };
+    if state.on_main_thread() {
+        return show();
+    }
+    let app = state.app_handle()?;
+    let (tx, rx) = mpsc::channel();
+    app.run_on_main_thread(move || {
+        let _ = tx.send(show());
+    })
+    .ok()?;
+    rx.recv().ok().flatten()
+}
+
+/// The open profile's folder: the parent of its media folder (see
+/// `CollectionPaths::in_profile`).
+fn profile_dir(state: &AppState) -> Result<PathBuf, String> {
+    state
+        .media_dir()
+        .and_then(|dir| dir.parent().map(Path::to_path_buf))
+        .ok_or_else(|| "no collection open".to_string())
+}
+
+/// `pm.backupFolder()` in the Qt app: <profile>/backups, created on demand.
+fn profile_paths(state: &AppState) -> Result<ProfilePaths, String> {
+    let dir = profile_dir(state)?;
+    let backups = dir.join("backups");
+    std::fs::create_dir_all(&backups)
+        .map_err(|err| format!("create {}: {err}", backups.display()))?;
+    Ok(ProfilePaths {
+        profile_dir: dir.to_string_lossy().into_owned(),
+        backup_folder: backups.to_string_lossy().into_owned(),
+    })
+}
+
+/// `mw.reopen()`: exporting a .colpkg leaves the collection closed.
+fn reopen_collection(state: &AppState) -> Result<(), String> {
+    let dir = profile_dir(state)?;
+    // Closing an already closed collection is an error we can ignore.
+    let _ = crate::profile::close_collection(&state.backend);
+    crate::profile::open_collection(&state.backend, &dir).map_err(|err| format!("{err:#}"))
+}
+
+/// ColpkgImporter._import: the backend needs the collection closed while it
+/// replaces the files, and it is reopened whether or not that succeeded.
+fn import_collection_package(state: &AppState, path: &str) -> Result<(), String> {
+    let dir = profile_dir(state)?;
+    let paths = crate::profile::CollectionPaths::in_profile(&dir);
+    crate::profile::close_collection(&state.backend).map_err(|err| format!("{err:#}"))?;
+    let request = anki_proto::import_export::ImportCollectionPackageRequest {
+        col_path: paths.collection.to_string_lossy().into_owned(),
+        backup_path: path.to_string(),
+        media_folder: paths.media_folder.to_string_lossy().into_owned(),
+        media_db: paths.media_db.to_string_lossy().into_owned(),
+    };
+    let imported = crate::rpc::call_typed::<_, anki_proto::generic::Empty>(
+        &state.backend,
+        "importCollectionPackage",
+        &request,
+    )
+    .map(|_| ())
+    .map_err(|err| err.message());
+    let reopened =
+        crate::profile::open_collection(&state.backend, &dir).map_err(|err| format!("{err:#}"));
+    imported.and(reopened)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn save_picker_is_answered_by_the_environment() {
+        const VAR: &str = "ANKI_TEST_FILE_SAVE_UNIT_TEST";
+        std::env::remove_var(VAR);
+        assert_eq!(env_answer(VAR), None, "unset: show the dialog");
+        std::env::set_var(VAR, "");
+        assert_eq!(env_answer(VAR), Some(None), "empty: cancelled");
+        std::env::set_var(VAR, "/tmp/out/Default.apkg");
+        assert_eq!(
+            env_answer(VAR),
+            Some(Some(PathBuf::from("/tmp/out/Default.apkg")))
+        );
+        std::env::remove_var(VAR);
+    }
+
+    #[test]
+    fn save_request_parses_with_defaults() {
+        let req: FileSave = serde_json::from_str(
+            r#"{"title":"Export","extensions":["apkg"],"default_name":"Default.apkg"}"#,
+        )
+        .unwrap();
+        assert_eq!(req.title, "Export");
+        assert_eq!(req.extensions, vec!["apkg"]);
+        assert_eq!(req.default_name, "Default.apkg");
+        assert!(req.filter_description.is_empty());
+        let empty: FileSave = serde_json::from_str("{}").unwrap();
+        assert!(empty.default_name.is_empty());
+    }
 
     #[test]
     fn only_web_and_mail_links_open() {
