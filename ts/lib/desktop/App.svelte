@@ -33,6 +33,9 @@ active.
     import { installRpcDoneHook, isOperation, onRpcDone } from "./rpc-events";
     import { installShellServices } from "./shell-services";
     import { isTypingTarget, ShortcutMap } from "./shortcuts";
+    import ToolHost, { type PageRequest } from "./tools/ToolHost.svelte";
+    import { TOOL_SHORTCUTS } from "./tools/tools";
+    import ToolsMenu from "./tools/ToolsMenu.svelte";
 
     type Screen =
         | { kind: "overview" }
@@ -50,6 +53,7 @@ active.
     let reviewer: Reviewer;
     let embedded: EmbeddedPage;
     let addEditor: EditorPanel;
+    let tools: ToolHost;
     let toast: string | null = null;
     let toastTimer: ReturnType<typeof setTimeout> | undefined;
     let refreshTimer: ReturnType<typeof setTimeout> | undefined;
@@ -102,7 +106,23 @@ active.
         await refreshDecks();
     }
 
+    /** Tools: embed one of the SvelteKit routes (statistics, import, preferences). */
+    function openPage(page: PageRequest): void {
+        screen = { kind: "page", ...page };
+    }
+
+    /** Tools: the collection changed, and possibly the current deck with it. */
+    async function onToolChanged(): Promise<void> {
+        currentDeckId = await fetchCurrentDeckId();
+        await refreshDecks();
+    }
+
     function openDeckOptions(deckId: bigint): void {
+        if (rows.find((r) => r.id === deckId)?.filtered) {
+            // overview.py: a filtered deck's options are its filter settings.
+            void tools?.run("filteredDeck", deckId);
+            return;
+        }
         screen = {
             kind: "page",
             title: tr.deckConfigTitle(),
@@ -189,6 +209,10 @@ active.
             },
         ],
         ["a", () => openAdd()],
+        ...TOOL_SHORTCUTS.map(([spec, id]): [string, () => void] => [
+            spec,
+            () => void tools?.run(id),
+        ]),
         [
             "s",
             () => {
@@ -218,7 +242,7 @@ active.
     ]);
 
     function onKeydown(event: KeyboardEvent): void {
-        if (isTypingTarget(event.target)) {
+        if (isTypingTarget(event.target) || tools?.isOpen()) {
             return;
         }
         if (screen.kind === "review" && reviewer?.handleKey(event)) {
@@ -279,6 +303,7 @@ active.
         on:rename={(e) => onRenameDeck(e.detail)}
         on:delete={(e) => onDeleteDeck(e.detail)}
         on:create={onCreateDeck}
+        on:export={(e) => tools?.run("export", e.detail)}
     />
 
     <main>
@@ -315,6 +340,14 @@ active.
                     {tr.actionsAdd()}
                 </button>
             {/if}
+            <button
+                class="tool"
+                title={tr.actionsShortcutKey({ val: "T" })}
+                on:click={() => tools?.run("stats")}
+            >
+                {tr.statisticsTitle()}
+            </button>
+            <ToolsMenu on:action={(e) => tools?.run(e.detail)} />
         </div>
 
         <div class="content">
@@ -350,9 +383,20 @@ active.
                     on:study={startStudy}
                     on:options={(e) => openDeckOptions(e.detail)}
                     on:changed={refreshDecks}
+                    on:customStudy={() => tools?.run("customStudy")}
                 />
             {/if}
         </div>
+
+        <ToolHost
+            bind:this={tools}
+            deckId={currentDeckId}
+            deckName={rows.find((r) => r.id === currentDeckId)?.name ?? ""}
+            on:page={(e) => openPage(e.detail)}
+            on:changed={onToolChanged}
+            on:select={(e) => onSelectDeck(e.detail)}
+            on:notify={(e) => showToast(e.detail)}
+        />
 
         {#if toast}
             <div class="toast">{toast}</div>

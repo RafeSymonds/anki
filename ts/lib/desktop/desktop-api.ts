@@ -53,3 +53,45 @@ export async function pickFile(options: FilePickerOptions = {}): Promise<string>
     const result = (await response.json()) as { path: string };
     return result.path ?? "";
 }
+
+export interface SavePickerOptions extends FilePickerOptions {
+    /** Suggested file name, e.g. "Default.apkg". */
+    defaultName?: string;
+}
+
+/** Native save-file dialog; empty string when cancelled (ANKI_TEST_FILE_SAVE in tests). */
+export async function pickSavePath(options: SavePickerOptions = {}): Promise<string> {
+    const response = await post(
+        "saveFilePicker",
+        JSON.stringify({
+            title: options.title ?? "",
+            filter_description: options.filterDescription ?? "",
+            extensions: options.extensions ?? [],
+            default_name: options.defaultName ?? "",
+        }),
+    );
+    const result = (await response.json()) as { path: string };
+    return result.path ?? "";
+}
+
+export interface ProfilePaths {
+    profileDir: string;
+    /** The Qt app's `pm.backupFolder()`: <profile>/backups, created on demand. */
+    backupFolder: string;
+}
+
+export async function profilePaths(): Promise<ProfilePaths> {
+    const response = await post("profilePaths", "");
+    const result = (await response.json()) as { profile_dir: string; backup_folder: string };
+    return { profileDir: result.profile_dir, backupFolder: result.backup_folder };
+}
+
+/** Open the collection again after a call that closed it (exporting a .colpkg). */
+export async function reopenCollection(): Promise<void> {
+    await post("reopenCollection", "");
+}
+
+/** Replace the collection with a .colpkg: close, import, reopen (ColpkgImporter._import). */
+export async function importCollectionPackage(path: string): Promise<void> {
+    await post("importCollectionPackage", JSON.stringify({ path }));
+}

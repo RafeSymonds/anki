@@ -23,6 +23,7 @@ deck's actions.
         rename: bigint;
         delete: bigint;
         create: void;
+        export: bigint;
     }>();
 
     let menuFor: bigint | null = null;
@@ -105,6 +106,14 @@ deck's actions.
                                 }}
                             >
                                 {tr.actionsOptions()}
+                            </button>
+                            <button
+                                on:click={() => {
+                                    menuFor = null;
+                                    dispatch("export", row.id);
+                                }}
+                            >
+                                {tr.actionsExport()}
                             </button>
                             <button
                                 on:click={() => {
