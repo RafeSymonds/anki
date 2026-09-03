@@ -15,11 +15,11 @@ function tokensIn(block: string): string[] {
 describe("the theme stylesheet", () => {
     test("defines the same tokens in both themes", () => {
         const light = THEME_CSS.slice(
-            THEME_CSS.indexOf(":root {"),
-            THEME_CSS.indexOf(":root.night-mode"),
+            THEME_CSS.indexOf(":root:root {"),
+            THEME_CSS.indexOf(":root:root.night-mode"),
         );
         const dark = THEME_CSS.slice(
-            THEME_CSS.indexOf(":root.night-mode"),
+            THEME_CSS.indexOf(":root:root.night-mode"),
             THEME_CSS.indexOf("@media"),
         );
         const colorTokens = (block: string) =>
@@ -32,6 +32,12 @@ describe("the theme stylesheet", () => {
                 .sort();
         expect(colorTokens(dark)).toEqual(colorTokens(light));
         expect(colorTokens(light).length).toBeGreaterThan(30);
+    });
+
+    test("outranks the tokens the app's own stylesheet defines at :root", () => {
+        // The sheet is inserted first, so it needs the higher specificity.
+        expect(THEME_CSS).toContain(":root:root {");
+        expect(THEME_CSS).not.toMatch(/(^|\n):root \{/);
     });
 
     test("keeps the dark values for a system dark preference", () => {

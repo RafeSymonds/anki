@@ -186,6 +186,17 @@ impl Options {
     }
 }
 
+/// The window's own background, matching `--app-ground` in
+/// ts/lib/desktop/theme.ts and the first-paint CSS in scheme.rs. The window
+/// is painted with it before the web view has anything to show.
+pub fn ground_color(dark: bool) -> tauri::utils::config::Color {
+    if dark {
+        tauri::utils::config::Color(0x15, 0x17, 0x1c, 0xff)
+    } else {
+        tauri::utils::config::Color(0xf1, 0xf3, 0xf8, 0xff)
+    }
+}
+
 /// Route the main window opens at. `ANKI_START_ROUTE` overrides it during
 /// development so an individual page can be checked in isolation.
 fn start_route() -> String {
@@ -288,6 +299,9 @@ fn run_window(options: Options) {
             }
 
             let url = format!("anki://localhost{}", start_route());
+            // The window is created hidden so its ground can be set to the
+            // app's own before it is shown; otherwise macOS paints a white
+            // window for a frame or two, which is glaring in dark mode.
             let window = WebviewWindowBuilder::new(
                 app,
                 "main",
@@ -298,7 +312,11 @@ fn run_window(options: Options) {
             .min_inner_size(760.0, 500.0)
             .title_bar_style(TitleBarStyle::Overlay)
             .hidden_title(true)
+            .visible(false)
             .build()?;
+            let dark = matches!(window.theme(), Ok(tauri::Theme::Dark));
+            let _ = window.set_background_color(Some(ground_color(dark)));
+            window.show()?;
             eprintln!("main window created");
 
             // Closing the window first lets the shell finish (sync on quit),
@@ -340,6 +358,18 @@ fn run_window(options: Options) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The window ground has to match what the pages paint themselves with,
+    /// or the window edge shows a seam while a page loads.
+    #[test]
+    fn window_ground_matches_the_stylesheets() {
+        let dark = ground_color(true);
+        let light = ground_color(false);
+        assert_eq!((dark.0, dark.1, dark.2, dark.3), (0x15, 0x17, 0x1c, 0xff));
+        assert_eq!((light.0, light.1, light.2, light.3), (0xf1, 0xf3, 0xf8, 0xff));
+        assert!(crate::scheme::FIRST_PAINT_CSS.contains("#15171c"));
+        assert!(crate::scheme::FIRST_PAINT_CSS.contains("#f1f3f8"));
+    }
 
     #[test]
     fn parses_options() {

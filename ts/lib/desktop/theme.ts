@@ -102,6 +102,15 @@ const LIGHT = `
     --app-review-soft: #e3f5ed;
     --app-shadow-card: 0 1px 2px rgba(18, 22, 33, 0.05), 0 6px 18px rgba(18, 22, 33, 0.07);
     --app-shadow-pop: 0 8px 30px rgba(18, 22, 33, 0.16);
+
+    /* Bootstrap paints the body and its buttons from its own variables on
+       the pages the shell embeds. */
+    --bs-body-bg: #f1f3f8;
+    --bs-body-color: #171a20;
+    --bs-border-color: #e2e6ef;
+    --bs-primary: #4c56e0;
+    --bs-link-color: #3b46cf;
+    --bs-link-hover-color: #2f3ab8;
 `;
 
 const DARK = `
@@ -168,26 +177,37 @@ const DARK = `
     --app-review-soft: #16302a;
     --app-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.45), 0 8px 24px rgba(0, 0, 0, 0.35);
     --app-shadow-pop: 0 10px 34px rgba(0, 0, 0, 0.55);
+
+    --bs-body-bg: #15171c;
+    --bs-body-color: #e8ebf2;
+    --bs-border-color: #2c313b;
+    --bs-primary: #8f97ff;
+    --bs-link-color: #9aa2ff;
+    --bs-link-hover-color: #b3b9ff;
 `;
 
 /**
- * Shared rules. Dark values are also emitted for `prefers-color-scheme` so a
- * page that renders before the shell has tagged it does not flash white.
+ * Shared rules. `:root:root` is deliberate: the same tokens are defined by
+ * ts/lib/sass/_root-vars.scss at plain `:root`, and this sheet is inserted
+ * before a page's own styles, so it needs the extra specificity to win.
+ *
+ * Dark values are also emitted for `prefers-color-scheme` so a page that
+ * renders before the shell has tagged it does not flash white.
  */
 export const THEME_CSS = `
-:root {
+:root:root {
 ${FONTS}${METRICS}${LIGHT}
     color-scheme: light;
 }
-:root.night-mode,
-:root.night_mode,
-body.night-mode,
-body.nightMode {
+:root:root.night-mode,
+:root:root.night_mode,
+:root:root body.night-mode,
+:root:root body.nightMode {
 ${DARK}
     color-scheme: dark;
 }
 @media (prefers-color-scheme: dark) {
-    :root:not(.day-mode) {
+    :root:root:not(.day-mode) {
 ${DARK}
         color-scheme: dark;
     }
@@ -195,6 +215,18 @@ ${DARK}
 html, body {
     font-family: var(--app-font-ui);
     -webkit-font-smoothing: antialiased;
+}
+/* Bootstrap's primary button appears on the pages the shell embeds. */
+.btn.btn-primary {
+    background-color: var(--app-accent);
+    border-color: var(--app-accent);
+    color: var(--app-accent-fg);
+}
+.btn.btn-primary:hover,
+.btn.btn-primary:focus {
+    background-color: var(--app-accent-hover);
+    border-color: var(--app-accent-hover);
+    color: var(--app-accent-fg);
 }
 `;
 

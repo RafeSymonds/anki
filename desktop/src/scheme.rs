@@ -262,7 +262,7 @@ fn dispatch_inner(state: &AppState, method: &Method, path: &str, body: &[u8]) ->
         Route::File(file) => serve_file(&file),
         Route::Index => serve_index(state),
         Route::Media(name) => serve_media(state, &name),
-        Route::CardFrame => html(inject_init_script(CARD_FRAME_HTML)),
+        Route::CardFrame => html(inject_init_script(CARD_FRAME_HTML, CARD_FIRST_PAINT_CSS)),
         Route::Ready => {
             if state.media_dir().is_some() {
                 text(StatusCode::OK, "ok".into())
@@ -283,7 +283,7 @@ fn dispatch_inner(state: &AppState, method: &Method, path: &str, body: &[u8]) ->
 
 fn serve_index(state: &AppState) -> Reply {
     match std::fs::read_to_string(state.web.sveltekit().join("index.html")) {
-        Ok(page) => html(inject_init_script(&page)),
+        Ok(page) => html(inject_init_script(&page, FIRST_PAINT_CSS)),
         Err(_) => text(
             StatusCode::NOT_FOUND,
             "web build missing: run `just web`".into(),
@@ -297,11 +297,33 @@ fn serve_index(state: &AppState) -> Reply {
 pub const STANDARD_CSS: &str =
     r#"html { font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif; }"#;
 
+/// What a page is painted with before its own stylesheets arrive. Without
+/// it a page opened in dark mode flashes white for a frame; the values are
+/// the ground and text of ts/lib/desktop/theme.ts.
+pub const FIRST_PAINT_CSS: &str = r#"
+:root { color-scheme: light; }
+html, body { background-color: #f1f3f8; color: #171a20; }
+@media (prefers-color-scheme: dark) {
+  :root { color-scheme: dark; }
+  html, body { background-color: #15171c; color: #e8ebf2; }
+}"#;
+
+/// The same for the card frame, which must not touch the text colour: that
+/// belongs to the note type's own stylesheet.
+pub const CARD_FIRST_PAINT_CSS: &str = r#"
+:root { color-scheme: light; }
+html, body { background-color: #f1f3f8; }
+@media (prefers-color-scheme: dark) {
+  :root { color-scheme: dark; }
+  html, body { background-color: #1d2027; }
+}"#;
+
 /// Add the shim as the first script of a document so it runs before any
-/// page code, plus the standard stylesheet. The SvelteKit page's CSP allows
-/// same-origin scripts and inline styles.
-pub fn inject_init_script(page: &str) -> String {
-    let tag = format!("<script src=\"{INIT_SCRIPT_PATH}\"></script><style>{STANDARD_CSS}</style>");
+/// page code, plus the standard stylesheet and `css`. The SvelteKit page's
+/// CSP allows same-origin scripts and inline styles.
+pub fn inject_init_script(page: &str, css: &str) -> String {
+    let tag =
+        format!("<script src=\"{INIT_SCRIPT_PATH}\"></script><style>{STANDARD_CSS}{css}</style>");
     match page.find("<head>") {
         Some(idx) => {
             let at = idx + "<head>".len();
@@ -325,6 +347,17 @@ pub fn init_script() -> String {
         r#"(function () {{
     if (window.__ankiShim) {{ return; }}
     window.__ankiShim = true;
+    // Dark mode before the first paint. checkNightMode() in tslib does the
+    // same, but only once the page's own bundle has run, which is a frame or
+    // two of white in a dark window.
+    try {{
+        const dark = location.hash === '#night'
+            || window.matchMedia("(prefers-color-scheme: dark)").matches;
+        if (dark) {{
+            document.documentElement.classList.add("night-mode");
+            document.documentElement.dataset.bsTheme = "dark";
+        }}
+    }} catch (err) {{ /* a document without matchMedia can wait for the shell */ }}
     const FRONTEND = new Set({frontend_methods});
     const origFetch = window.fetch.bind(window);
     window.fetch = async function (input, init) {{
@@ -561,14 +594,38 @@ mod tests {
     fn init_script_is_injected_first_in_head() {
         let page = inject_init_script(
             "<!doctype html><html><head><meta charset=\"utf-8\"></head><body></body></html>",
+            FIRST_PAINT_CSS,
         );
         assert!(page.starts_with(
             "<!doctype html><html><head><script src=\"/_desktop/init.js\"></script><style>"
         ));
         assert!(page.contains("font-family"));
         assert!(page.contains("</style><meta"));
-        assert!(inject_init_script("<p>no head</p>")
+        assert!(inject_init_script("<p>no head</p>", "")
             .starts_with("<script src=\"/_desktop/init.js\"></script>"));
+    }
+
+    /// A page that opens while the system is dark must be painted dark from
+    /// the first frame, before any of its own styles have loaded.
+    #[test]
+    fn pages_are_painted_before_their_styles_arrive() {
+        let page = inject_init_script("<html><head></head><body></body></html>", FIRST_PAINT_CSS);
+        assert!(page.contains("prefers-color-scheme: dark"));
+        assert!(page.contains("background-color: #15171c"));
+        assert!(page.contains("color-scheme: dark"));
+        // The card frame leaves the text colour to the note type.
+        assert!(!CARD_FIRST_PAINT_CSS.contains("; color:"));
+        assert!(!CARD_FIRST_PAINT_CSS.contains(" color: #171a20"));
+        assert!(!CARD_FIRST_PAINT_CSS.contains(" color: #e8ebf2"));
+        assert!(CARD_FIRST_PAINT_CSS.contains("background-color: #1d2027"));
+    }
+
+    #[test]
+    fn init_script_marks_night_mode_before_the_page_renders() {
+        let script = init_script();
+        assert!(script.contains("prefers-color-scheme: dark"));
+        assert!(script.contains("classList.add(\"night-mode\")"));
+        assert!(script.contains("location.hash === '#night'"));
     }
 
     #[test]
