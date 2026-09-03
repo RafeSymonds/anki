@@ -108,55 +108,6 @@ pub fn close_collection(backend: &Backend) -> Result<()> {
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn paths_follow_pylib_layout() {
-        let paths = CollectionPaths::in_profile(Path::new("/base/User 1"));
-        assert_eq!(paths.collection, Path::new("/base/User 1/collection.anki2"));
-        assert_eq!(
-            paths.media_folder,
-            Path::new("/base/User 1/collection.media")
-        );
-        assert_eq!(
-            paths.media_db,
-            Path::new("/base/User 1/collection.media.db2")
-        );
-    }
-
-    #[test]
-    fn profile_names_are_folder_names() {
-        assert!(valid_profile_name("User 1"));
-        assert!(valid_profile_name("Work"));
-        assert!(!valid_profile_name(""));
-        assert!(!valid_profile_name(".hidden"));
-        assert!(!valid_profile_name("a/b"));
-        assert!(!valid_profile_name("addons21"));
-    }
-
-    #[test]
-    fn default_profile_prefers_existing_collections() {
-        let base = tempfile::tempdir().unwrap();
-        assert_eq!(
-            default_profile_dir(base.path()),
-            base.path().join(DEFAULT_PROFILE)
-        );
-
-        std::fs::create_dir_all(base.path().join("addons21")).unwrap();
-        std::fs::create_dir_all(base.path().join("Alpha")).unwrap();
-        std::fs::create_dir_all(base.path().join("Beta")).unwrap();
-        std::fs::write(base.path().join("Beta/collection.anki2"), b"").unwrap();
-
-        assert_eq!(
-            profile_dirs(base.path()),
-            vec![base.path().join("Alpha"), base.path().join("Beta")]
-        );
-        assert_eq!(default_profile_dir(base.path()), base.path().join("Beta"));
-    }
-}
-
 /// Profile names under the base folder, always including the open one.
 pub fn profile_names(base: &Path, current: Option<&Path>) -> Vec<String> {
     let mut names: Vec<String> = profile_dirs(base)
@@ -214,4 +165,53 @@ pub fn switch_profile(state: &AppState, name: &str) -> Result<()> {
     state.set_media_dir(Some(CollectionPaths::in_profile(&dir).media_folder));
     state.replace_settings(Settings::load(&dir));
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn paths_follow_pylib_layout() {
+        let paths = CollectionPaths::in_profile(Path::new("/base/User 1"));
+        assert_eq!(paths.collection, Path::new("/base/User 1/collection.anki2"));
+        assert_eq!(
+            paths.media_folder,
+            Path::new("/base/User 1/collection.media")
+        );
+        assert_eq!(
+            paths.media_db,
+            Path::new("/base/User 1/collection.media.db2")
+        );
+    }
+
+    #[test]
+    fn profile_names_are_folder_names() {
+        assert!(valid_profile_name("User 1"));
+        assert!(valid_profile_name("Work"));
+        assert!(!valid_profile_name(""));
+        assert!(!valid_profile_name(".hidden"));
+        assert!(!valid_profile_name("a/b"));
+        assert!(!valid_profile_name("addons21"));
+    }
+
+    #[test]
+    fn default_profile_prefers_existing_collections() {
+        let base = tempfile::tempdir().unwrap();
+        assert_eq!(
+            default_profile_dir(base.path()),
+            base.path().join(DEFAULT_PROFILE)
+        );
+
+        std::fs::create_dir_all(base.path().join("addons21")).unwrap();
+        std::fs::create_dir_all(base.path().join("Alpha")).unwrap();
+        std::fs::create_dir_all(base.path().join("Beta")).unwrap();
+        std::fs::write(base.path().join("Beta/collection.anki2"), b"").unwrap();
+
+        assert_eq!(
+            profile_dirs(base.path()),
+            vec![base.path().join("Alpha"), base.path().join("Beta")]
+        );
+        assert_eq!(default_profile_dir(base.path()), base.path().join("Beta"));
+    }
 }
