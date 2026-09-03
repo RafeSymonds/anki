@@ -1,3 +1,6 @@
+// Copyright: Ankitects Pty Ltd and contributors
+// License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
+
 //! A small loopback HTTP server exposing the same routes as the `anki://`
 //! scheme. Used by `anki-desktop --serve PORT` so the shell can be driven
 //! by a browser and by Playwright end-to-end tests without a window.

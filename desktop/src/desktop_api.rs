@@ -1,3 +1,6 @@
+// Copyright: Ankitects Pty Ltd and contributors
+// License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
+
 //! Native actions the app shell asks the host for, posted to
 //! `/_desktop/{command}`. These are the pieces of FrontendService that need
 //! the operating system rather than rslib: opening links and files, native

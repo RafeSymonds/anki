@@ -1,3 +1,6 @@
+// Copyright: Ankitects Pty Ltd and contributors
+// License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
+
 //! The `anki://` scheme: everything the web view loads goes through here.
 //!
 //! `/_anki/{method}` POSTs are backend RPCs. Paths under `/_anki/` and

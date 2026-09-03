@@ -1,3 +1,6 @@
+// Copyright: Ankitects Pty Ltd and contributors
+// License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
+
 //! Per-profile settings the shell keeps outside the collection: the values
 //! the Qt app stored in its pickled profile and meta dictionaries (sync
 //! credentials, remembered dialog state, editor preferences). Stored as

@@ -1,3 +1,6 @@
+// Copyright: Ankitects Pty Ltd and contributors
+// License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
+
 //! Simulation testing: random sequences of the operations the shell performs
 //! (answering, burying, undoing, adding and deleting notes, flags, tags,
 //! rescheduling) against a real collection, with invariants checked after

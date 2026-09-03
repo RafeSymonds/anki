@@ -1,3 +1,6 @@
+// Copyright: Ankitects Pty Ltd and contributors
+// License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
+
 //! Maps `/_anki/{method}` calls from the web code onto rslib.
 //!
 //! The web code posts protobuf bytes to a camelCase method name. rslib

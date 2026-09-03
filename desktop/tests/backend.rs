@@ -1,3 +1,6 @@
+// Copyright: Ankitects Pty Ltd and contributors
+// License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
+
 //! Integration tests: the desktop crate driving rslib in-process, the same
 //! way the running app does, against a throwaway collection.
 

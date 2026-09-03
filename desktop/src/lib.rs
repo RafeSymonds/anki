@@ -1,3 +1,6 @@
+// Copyright: Ankitects Pty Ltd and contributors
+// License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
+
 // Anki desktop shell: one Tauri window over rslib and the Svelte pages in ts/.
 //
 // The web view loads everything through the custom `anki://` scheme (see

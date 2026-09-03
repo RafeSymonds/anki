@@ -1,3 +1,6 @@
+// Copyright: Ankitects Pty Ltd and contributors
+// License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
+
 //! The native macOS menu bar. Besides the standard application and edit
 //! menus (which WKWebView needs for copy/paste and the usual text keys),
 //! it lists the app's actions; picking one runs `window.__ankiMenu(id)` in
