@@ -120,6 +120,7 @@ fn missing_config_keys_answer_null_like_mediasrv() {
             web: dir.path().join("web"),
         },
         Settings::load(dir.path()),
+        dir.path().to_path_buf(),
     );
 
     let body = PbString {
@@ -136,4 +137,120 @@ fn missing_config_keys_answer_null_like_mediasrv() {
     assert_eq!(reply.status(), 500);
 
     profile::close_collection(&state.backend).unwrap();
+}
+
+#[test]
+fn forced_backups_land_in_the_profile_folder() {
+    let dir = tempfile::tempdir().unwrap();
+    let backend = new_backend();
+    profile::open_collection(&backend, dir.path()).unwrap();
+    let state = AppState::new(
+        backend,
+        WebRoot {
+            web: dir.path().join("web"),
+        },
+        Settings::load(dir.path()),
+        dir.path().to_path_buf(),
+    );
+    state.set_profile_dir(Some(dir.path().to_path_buf()));
+
+    assert!(anki_desktop::backup::create_backup(&state, true).unwrap());
+    let backups: Vec<_> = std::fs::read_dir(dir.path().join("backups"))
+        .unwrap()
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .collect();
+    assert!(
+        backups.iter().any(|name| name.ends_with(".colpkg")),
+        "expected a .colpkg in {backups:?}"
+    );
+    profile::close_collection(&state.backend).unwrap();
+}
+
+#[test]
+fn switching_profiles_moves_collection_settings_and_media() {
+    let base = tempfile::tempdir().unwrap();
+    let first = base.path().join("User 1");
+    let backend = new_backend();
+    profile::open_collection(&backend, &first).unwrap();
+    let state = AppState::new(
+        backend,
+        WebRoot {
+            web: base.path().join("web"),
+        },
+        Settings::load(&first),
+        base.path().to_path_buf(),
+    );
+    state.set_profile_dir(Some(first.clone()));
+    state
+        .settings_set(
+            anki_desktop::settings::Scope::Profile,
+            "syncUser",
+            serde_json::json!("a"),
+        )
+        .unwrap();
+
+    profile::switch_profile(&state, "Second").unwrap();
+    assert_eq!(state.profile_dir(), Some(base.path().join("Second")));
+    assert_eq!(
+        state.media_dir(),
+        Some(base.path().join("Second/collection.media"))
+    );
+    assert!(base.path().join("Second/collection.anki2").exists());
+    // Settings are per profile: the new one starts empty.
+    assert_eq!(
+        state.settings_get(anki_desktop::settings::Scope::Profile, "syncUser"),
+        serde_json::Value::Null
+    );
+    let listed = profile::profiles_json(&state);
+    assert_eq!(listed["current"], "Second");
+    assert_eq!(listed["profiles"], serde_json::json!(["Second", "User 1"]));
+
+    profile::switch_profile(&state, "User 1").unwrap();
+    assert_eq!(
+        state.settings_get(anki_desktop::settings::Scope::Profile, "syncUser"),
+        serde_json::json!("a")
+    );
+    assert!(profile::switch_profile(&state, "../x").is_err());
+    profile::close_collection(&state.backend).unwrap();
+}
+
+#[test]
+fn reseeding_still_works_after_a_stock_notetype_gained_a_field() {
+    use anki_proto::notetypes::notetype::Field;
+    use anki_proto::notetypes::Notetype;
+    use anki_proto::notetypes::NotetypeId;
+    use anki_proto::notetypes::NotetypeNames;
+    use anki_proto::search::SearchRequest;
+    use anki_proto::search::SearchResponse;
+
+    let dir = tempfile::tempdir().unwrap();
+    let backend = new_backend();
+    profile::open_collection(&backend, dir.path()).unwrap();
+    anki_desktop::demo::seed(&backend, 4).unwrap();
+
+    let names: NotetypeNames = rpc::call_typed(&backend, "getNotetypeNames", &Empty {}).unwrap();
+    let basic = names.entries.iter().find(|n| n.name == "Basic").unwrap().id;
+    let mut notetype: Notetype =
+        rpc::call_typed(&backend, "getNotetype", &NotetypeId { ntid: basic }).unwrap();
+    notetype.fields.push(Field {
+        name: "Extra".into(),
+        config: Some(Default::default()),
+        ..Default::default()
+    });
+    let _: anki_proto::collection::OpChanges =
+        rpc::call_typed(&backend, "updateNotetype", &notetype).unwrap();
+
+    // What the e2e suite does after its first-run spec empties the collection.
+    anki_desktop::demo::seed(&backend, 4).unwrap();
+    let found: SearchResponse = rpc::call_typed(
+        &backend,
+        "searchNotes",
+        &SearchRequest {
+            search: "tag:demo".into(),
+            order: None,
+        },
+    )
+    .unwrap();
+    assert_eq!(found.ids.len(), 8);
 }

@@ -35,4 +35,11 @@ test("a collection with no cards shows the welcome panel and leads to adding", a
     await page.getByRole("button", { name: /Make your first cards/ }).click();
     const editor = page.frameLocator("iframe[title=editor]");
     await expect(editor.locator(".field-container").first()).toBeVisible({ timeout: 20_000 });
+
+    // Put the demo notes back so a following project (the other engine)
+    // starts from the seeded collection too.
+    const reseeded = await request.post("/_desktop/seedDemo", { data: "24" });
+    expect(reseeded.ok()).toBe(true);
+    await page.goto("/");
+    await expect(page.locator("nav.sidebar .row", { hasText: "Default" })).toBeVisible();
 });

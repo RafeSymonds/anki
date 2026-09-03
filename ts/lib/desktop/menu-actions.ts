@@ -28,6 +28,7 @@ export const MENU_IDS = [
     "create_backup",
     "guide",
     "support",
+    "quit",
 ] as const;
 
 export type MenuId = (typeof MENU_IDS)[number];

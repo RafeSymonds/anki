@@ -10,6 +10,7 @@
 // the same routes are exposed over loopback HTTP instead of a window, for
 // browsers and end-to-end tests (see http.rs).
 
+pub mod backup;
 pub mod demo;
 pub mod desktop_api;
 pub mod http;
@@ -21,8 +22,11 @@ pub mod settings;
 pub mod sync;
 
 use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::RwLock;
 use std::thread::ThreadId;
 
 use anki::backend::Backend;
@@ -36,14 +40,17 @@ use tauri::RunEvent;
 use tauri::TitleBarStyle;
 use tauri::WebviewUrl;
 use tauri::WebviewWindowBuilder;
+use tauri::WindowEvent;
 
 /// Shared state available to every request handler.
 pub struct AppState {
     /// The rslib backend. One per process, the same way pylib holds one.
     pub backend: Backend,
     pub web: WebRoot,
-    /// Shell settings for the open profile.
-    pub settings: Settings,
+    /// Shell settings for the open profile; swapped when switching profiles.
+    settings: RwLock<Settings>,
+    /// The data folder holding the profiles.
+    base_dir: PathBuf,
     /// Media folder of the open collection, if any.
     media_dir: Mutex<Option<PathBuf>>,
     /// Folder of the open profile; needed to reopen its collection (sync.rs).
@@ -52,19 +59,73 @@ pub struct AppState {
     app: Mutex<Option<AppHandle>>,
     /// Native dialogs must run here.
     main_thread: ThreadId,
+    /// Set once the shell has finished its before-quit work; the next close
+    /// request is then allowed through.
+    quitting: AtomicBool,
+    /// True under `--serve`: test-only commands such as seeding are allowed.
+    serve_mode: AtomicBool,
 }
 
 impl AppState {
-    pub fn new(backend: Backend, web: WebRoot, settings: Settings) -> Self {
+    pub fn new(backend: Backend, web: WebRoot, settings: Settings, base_dir: PathBuf) -> Self {
         Self {
             backend,
             web,
-            settings,
+            settings: RwLock::new(settings),
+            base_dir,
             media_dir: Mutex::new(None),
             profile_dir: Mutex::new(None),
             app: Mutex::new(None),
             main_thread: std::thread::current().id(),
+            quitting: AtomicBool::new(false),
+            serve_mode: AtomicBool::new(false),
         }
+    }
+
+    pub fn in_serve_mode(&self) -> bool {
+        self.serve_mode.load(Ordering::SeqCst)
+    }
+
+    pub fn set_serve_mode(&self) {
+        self.serve_mode.store(true, Ordering::SeqCst);
+    }
+
+    pub fn is_quitting(&self) -> bool {
+        self.quitting.load(Ordering::SeqCst)
+    }
+
+    /// Called by the shell when it is done (sync on quit finished): exits the
+    /// app, which runs the backup and closes the collection.
+    pub fn quit(&self) {
+        self.quitting.store(true, Ordering::SeqCst);
+        if let Some(app) = self.app_handle() {
+            app.exit(0);
+        }
+    }
+
+    pub fn base_dir(&self) -> &std::path::Path {
+        &self.base_dir
+    }
+
+    pub fn settings_get(&self, scope: settings::Scope, key: &str) -> serde_json::Value {
+        self.settings.read().expect("settings lock").get(scope, key)
+    }
+
+    pub fn settings_set(
+        &self,
+        scope: settings::Scope,
+        key: &str,
+        value: serde_json::Value,
+    ) -> anyhow::Result<()> {
+        self.settings
+            .read()
+            .expect("settings lock")
+            .set(scope, key, value)
+    }
+
+    /// Point the settings at another profile folder (after switching).
+    pub fn replace_settings(&self, settings: Settings) {
+        *self.settings.write().expect("settings lock") = settings;
     }
 
     pub fn app_handle(&self) -> Option<AppHandle> {
@@ -160,7 +221,7 @@ pub fn open_state(options: &Options, web: WebRoot) -> AppState {
     }
 
     let settings = Settings::load(&profile_dir);
-    let state = AppState::new(backend, web, settings);
+    let state = AppState::new(backend, web, settings, base.clone());
     state.set_media_dir(Some(
         profile::CollectionPaths::in_profile(&profile_dir).media_folder,
     ));
@@ -172,6 +233,7 @@ pub fn run(options: Options) {
     match options.serve {
         Some(port) => {
             let state = open_state(&options, WebRoot::locate(None));
+            state.set_serve_mode();
             eprintln!("serving web assets from {}", state.web.web.display());
             http::serve(Arc::new(state), port).expect("http server");
         }
@@ -205,14 +267,35 @@ fn run_window(options: Options) {
             }
 
             let url = format!("anki://localhost{}", start_route());
-            WebviewWindowBuilder::new(app, "main", WebviewUrl::CustomProtocol(url.parse()?))
-                .title("Anki")
-                .inner_size(1180.0, 780.0)
-                .min_inner_size(760.0, 500.0)
-                .title_bar_style(TitleBarStyle::Overlay)
-                .hidden_title(true)
-                .build()?;
+            let window = WebviewWindowBuilder::new(
+                app,
+                "main",
+                WebviewUrl::CustomProtocol(url.parse()?),
+            )
+            .title("Anki")
+            .inner_size(1180.0, 780.0)
+            .min_inner_size(760.0, 500.0)
+            .title_bar_style(TitleBarStyle::Overlay)
+            .hidden_title(true)
+            .build()?;
             eprintln!("main window created");
+
+            // Closing the window first lets the shell finish (sync on quit),
+            // which then posts /_desktop/quit; that exits for real.
+            let handle = app.handle().clone();
+            window.on_window_event(move |event| {
+                if let WindowEvent::CloseRequested { api, .. } = event {
+                    let state = handle.state::<AppState>();
+                    if !state.is_quitting() {
+                        api.prevent_close();
+                        if let Some(main) = handle.get_webview_window("main") {
+                            let _ = main.eval(
+                                "window.__ankiBeforeQuit ? window.__ankiBeforeQuit() : fetch('/_desktop/quit', { method: 'POST' })",
+                            );
+                        }
+                    }
+                }
+            });
             Ok(())
         })
         .build(tauri::generate_context!())
@@ -221,6 +304,11 @@ fn run_window(options: Options) {
     app.run(|app, event| {
         if let RunEvent::Exit = event {
             let state = tauri::Manager::state::<AppState>(app);
+            match backup::create_backup(&state, false) {
+                Ok(true) => eprintln!("backup created"),
+                Ok(false) => {}
+                Err(err) => eprintln!("backup: {err:#}"),
+            }
             if let Err(err) = profile::close_collection(&state.backend) {
                 eprintln!("close collection: {err:#}");
             }

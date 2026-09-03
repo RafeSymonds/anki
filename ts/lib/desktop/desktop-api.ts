@@ -100,3 +100,23 @@ export async function profilePaths(): Promise<ProfilePaths> {
 export async function importCollectionPackage(path: string): Promise<void> {
     await post("importCollectionPackage", JSON.stringify({ path }));
 }
+
+/** Tell the host the shell is done; the app exits, backs up and closes the collection. */
+export async function quitApp(): Promise<void> {
+    await post("quit", "");
+}
+
+export interface ProfileList {
+    profiles: string[];
+    current: string;
+}
+
+export async function listProfiles(): Promise<ProfileList> {
+    const response = await post("profiles", "");
+    return (await response.json()) as ProfileList;
+}
+
+/** Close the current collection and open another profile's (created if new). */
+export async function switchProfile(name: string): Promise<void> {
+    await post("switchProfile", name);
+}

@@ -18,6 +18,8 @@ use anyhow::Context;
 use anyhow::Result;
 
 use crate::rpc;
+use crate::settings::Settings;
+use crate::AppState;
 
 pub const DEFAULT_PROFILE: &str = "User 1";
 
@@ -125,6 +127,16 @@ mod tests {
     }
 
     #[test]
+    fn profile_names_are_folder_names() {
+        assert!(valid_profile_name("User 1"));
+        assert!(valid_profile_name("Work"));
+        assert!(!valid_profile_name(""));
+        assert!(!valid_profile_name(".hidden"));
+        assert!(!valid_profile_name("a/b"));
+        assert!(!valid_profile_name("addons21"));
+    }
+
+    #[test]
     fn default_profile_prefers_existing_collections() {
         let base = tempfile::tempdir().unwrap();
         assert_eq!(
@@ -143,4 +155,63 @@ mod tests {
         );
         assert_eq!(default_profile_dir(base.path()), base.path().join("Beta"));
     }
+}
+
+/// Profile names under the base folder, always including the open one.
+pub fn profile_names(base: &Path, current: Option<&Path>) -> Vec<String> {
+    let mut names: Vec<String> = profile_dirs(base)
+        .iter()
+        .filter_map(|d| d.file_name().map(|n| n.to_string_lossy().into_owned()))
+        .collect();
+    if let Some(current) = current.and_then(|c| c.file_name()) {
+        let current = current.to_string_lossy().into_owned();
+        if !names.contains(&current) {
+            names.push(current);
+        }
+    }
+    names.sort();
+    names
+}
+
+/// `{ "profiles": [...], "current": "User 1" }` for the profile switcher.
+pub fn profiles_json(state: &AppState) -> serde_json::Value {
+    let current = state.profile_dir();
+    let names = profile_names(state.base_dir(), current.as_deref());
+    let current_name = current
+        .as_deref()
+        .and_then(|c| c.file_name())
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    serde_json::json!({ "profiles": names, "current": current_name })
+}
+
+/// A profile name is a plain folder name.
+pub fn valid_profile_name(name: &str) -> bool {
+    let name = name.trim();
+    !name.is_empty()
+        && name.len() <= 100
+        && !name.starts_with('.')
+        && name != "addons21"
+        && !name.contains('/')
+        && !name.contains('\\')
+        && !name.contains(':')
+}
+
+/// Close the open collection and open the named profile's, creating the
+/// profile when it does not exist yet. Settings and the media folder follow.
+pub fn switch_profile(state: &AppState, name: &str) -> Result<()> {
+    let name = name.trim();
+    if !valid_profile_name(name) {
+        anyhow::bail!("invalid profile name: {name:?}");
+    }
+    let dir = state.base_dir().join(name);
+    if state.profile_dir().as_deref() == Some(dir.as_path()) {
+        return Ok(());
+    }
+    close_collection(&state.backend).context("close current collection")?;
+    open_collection(&state.backend, &dir)?;
+    state.set_profile_dir(Some(dir.clone()));
+    state.set_media_dir(Some(CollectionPaths::in_profile(&dir).media_folder));
+    state.replace_settings(Settings::load(&dir));
+    Ok(())
 }

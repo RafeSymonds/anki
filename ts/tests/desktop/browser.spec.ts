@@ -47,8 +47,9 @@ test.describe("browser", () => {
         // The seed puts every second demo note into Default.
         expect(total).toBeGreaterThanOrEqual(12);
         await expect(rows(page)).toHaveCount(total);
-        // Cells come from browserRowForId: the sort field shows the question.
-        await expect(rows(page).first().locator(".cell").first()).toContainText("Question");
+        // Cells come from browserRowForId: the sort field shows the question
+        // (which note comes first depends on the sort the last run left).
+        await expect(rows(page).first().locator(".cell").first()).toContainText(/Question|capital of country/);
 
         // The first row is selected after a search, as in Qt, and the editor shows it.
         await expect(rows(page).first()).toHaveClass(/selected/);

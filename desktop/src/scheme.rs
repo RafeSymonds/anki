@@ -291,10 +291,17 @@ fn serve_index(state: &AppState) -> Reply {
     }
 }
 
+/// The stylesheet the Qt webview injected into every page
+/// (`AnkiWebView.standard_css`): the platform font, so pages that never set
+/// one do not fall back to a serif face.
+pub const STANDARD_CSS: &str =
+    r#"html { font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif; }"#;
+
 /// Add the shim as the first script of a document so it runs before any
-/// page code. The SvelteKit page's CSP allows same-origin scripts.
+/// page code, plus the standard stylesheet. The SvelteKit page's CSP allows
+/// same-origin scripts and inline styles.
 pub fn inject_init_script(page: &str) -> String {
-    let tag = format!("<script src=\"{INIT_SCRIPT_PATH}\"></script>");
+    let tag = format!("<script src=\"{INIT_SCRIPT_PATH}\"></script><style>{STANDARD_CSS}</style>");
     match page.find("<head>") {
         Some(idx) => {
             let at = idx + "<head>".len();
@@ -556,8 +563,10 @@ mod tests {
             "<!doctype html><html><head><meta charset=\"utf-8\"></head><body></body></html>",
         );
         assert!(page.starts_with(
-            "<!doctype html><html><head><script src=\"/_desktop/init.js\"></script><meta"
+            "<!doctype html><html><head><script src=\"/_desktop/init.js\"></script><style>"
         ));
+        assert!(page.contains("font-family"));
+        assert!(page.contains("</style><meta"));
         assert!(inject_init_script("<p>no head</p>")
             .starts_with("<script src=\"/_desktop/init.js\"></script>"));
     }

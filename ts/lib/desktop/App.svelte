@@ -29,6 +29,7 @@ active.
     import EditorPanel, { editorNoteInfo } from "./EditorPanel.svelte";
     import {
         openLink,
+        quitApp,
         reopenCollection,
         settingsGet,
         settingsSet,
@@ -61,6 +62,11 @@ active.
 
     let tree: DeckTreeNode | null = null;
     let rows: DeckRow[] = [];
+    // New cards go to the selected deck, unless it is a filtered deck: those
+    // cannot take new cards, so the editor falls back to its own defaults.
+    $: addDeckId = rows.find((r) => r.id === currentDeckId)?.filtered
+        ? null
+        : currentDeckId;
     let currentDeckId = 1n;
     let studied = "";
     let screen: Screen = { kind: "overview" };
@@ -269,13 +275,29 @@ active.
 
     let uninstallMenu: (() => void) | undefined;
 
+    // The host asks the shell to finish before the window closes (Cmd+Q, the
+    // close button, Quit in the menu): sync on quit if enabled, then quit.
+    let quitting = false;
+    async function beforeQuit(): Promise<void> {
+        if (quitting) {
+            return;
+        }
+        quitting = true;
+        try {
+            await sync.autoSync();
+        } catch (err) {
+            console.warn("sync on quit failed", err);
+        } finally {
+            await quitApp();
+        }
+    }
+
     function installMenu(): void {
         uninstallMenu = installMenuHandlers(
             {
                 preferences: () => tools?.run("preferences"),
                 sync: () => void sync.sync(),
-                switch_profile: () =>
-                    showToast("Switching profiles is not available yet"),
+                switch_profile: () => tools?.run("switchProfile"),
                 import: () => tools?.run("import"),
                 export: () => tools?.run("export"),
                 undo: menuUndo,
@@ -295,6 +317,7 @@ active.
                 create_backup: () => tools?.run("createBackup"),
                 guide: () => void openLink("https://docs.ankiweb.net/"),
                 support: () => void openLink("https://faqs.ankiweb.net/"),
+                quit: beforeQuit,
             },
             (id) => showToast(`Unhandled menu item: ${id}`),
         );
@@ -415,6 +438,9 @@ active.
         installFrontendService();
         installRpcDoneHook();
         installMenu();
+        (
+            window as unknown as { __ankiBeforeQuit?: () => Promise<void> }
+        ).__ankiBeforeQuit = beforeQuit;
         uninstallServices = installShellServices({
             notify: showToast,
             askUser: async (text) => confirm(text),
@@ -561,7 +587,7 @@ active.
                 <EditorPanel
                     bind:this={addEditor}
                     mode="add"
-                    deckId={currentDeckId}
+                    deckId={addDeckId}
                     {nightMode}
                     on:close={closeAdd}
                 />

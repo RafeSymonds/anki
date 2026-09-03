@@ -21,6 +21,7 @@ export type ToolId =
     | "checkMedia"
     | "emptyCards"
     | "noteTypes"
+    | "switchProfile"
     | "preferences";
 
 export interface ToolEntry {
@@ -40,6 +41,7 @@ export const TOOL_SHORTCUTS: [string, ToolId][] = [
     ["f", "filteredDeck"],
     ["/", "studyDeck"],
     ["Ctrl+Shift+n", "noteTypes"],
+    ["Ctrl+Shift+p", "switchProfile"],
 ];
 
 export function shortcutFor(id: ToolId): string | undefined {
@@ -51,6 +53,7 @@ export function toolSections(): ToolEntry[][] {
     const entry = (id: ToolId, label: string): ToolEntry => ({ id, label, shortcut: shortcutFor(id) });
     return [
         [
+            entry("switchProfile", "Switch Profile…"),
             entry("import", `${tr.actionsImport()}…`),
             entry("export", `${tr.actionsExport()}…`),
             entry("createBackup", "Create Backup"),

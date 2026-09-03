@@ -19,6 +19,7 @@ desktop/                     Rust crate `anki-desktop` (Tauri app + HTTP mode)
   src/http.rs                loopback HTTP server for `anki-desktop --serve PORT`
   src/demo.rs                demo notes for dev/e2e collections
   src/menu.rs                native menu bar; choices run window.__ankiMenu(id) in the shell
+  src/backup.rs              .colpkg backups into <profile>/backups (on quit, and Tools > Create Backup)
   web/card.html              the document cards render in (loads js/reviewer.js)
   tests/backend.rs           integration tests against a temporary collection
   tests/simulation.rs        seeded random operation sequences with invariants (ANKI_SIM_SEED/STEPS)
@@ -81,10 +82,19 @@ lists the methods that change the collection.
 
 **Native side.** `/_desktop/{command}` POSTs go to `desktop_api.rs`:
 `openLink`, `openMedia`, `showInMediaFolder`, `settingsGet`/`settingsSet`
-(`{scope: "profile"|"meta", key, value}`), `openFilePicker` (JSON in, `{path}`
-out; set `ANKI_TEST_FILE_PICK` in tests). Typed helpers are in
-`desktop-api.ts`. Add commands there when a feature needs the OS; keep them
-small and testable.
+(`{scope: "profile"|"meta", key, value}`), `openFilePicker` and
+`saveFilePicker` (JSON in, `{path}` out; `ANKI_TEST_FILE_PICK` /
+`ANKI_TEST_FILE_SAVE` answer them in tests), `closeCollection` /
+`reopenCollection` (around a full sync or a .colpkg import), `createBackup`,
+`quit`, `profiles` / `switchProfile` (see Profiles), and `seedDemo` (only
+under `--serve`, for tests). Typed helpers are
+in `desktop-api.ts`. Add commands there when a feature needs the OS; keep
+them small and testable.
+
+**Quitting.** Closing the window, Cmd+Q or Quit in the menu first runs
+`window.__ankiBeforeQuit()` in the shell (sync on quit when enabled), which
+then posts `/_desktop/quit`; on exit the host writes a backup if the
+configured interval has passed and closes the collection.
 
 **Documents.** Everything is one origin (`anki://localhost` in the app,
 `http://127.0.0.1:PORT` in HTTP mode). Static files come from
@@ -107,6 +117,15 @@ keeps `desktop-settings.json` in the profile folder (`settings.rs`), exposed
 to web code through `getProfileConfigJson`/`setProfileConfigJson`/
 `getMetaJson`/`setMetaJson` and to the shell through `settingsGet/Set`.
 Sync credentials, remembered dialog state and similar go there.
+
+**Profiles.** Each folder under the data folder (`profile.rs`: `ANKI_BASE`,
+else `~/Library/Application Support/Anki2`) is a profile with its own
+collection, media and `desktop-settings.json`. The app opens the first one
+(`User 1` on a fresh install). File > Switch Profile (Ctrl+Shift+P) lists
+them; picking one, or naming a new one, POSTs `switchProfile`, which closes
+the open collection, opens the other profile's (creating the folder when new)
+and swaps the state's paths and settings. The shell then reloads the page,
+the way the Qt app closes and reopens its main window.
 
 ## Commands
 

@@ -27,6 +27,7 @@ and report through a notice.
     import EmptyCardsDialog from "./EmptyCardsDialog.svelte";
     import ExportDialog from "./ExportDialog.svelte";
     import FilteredDeckDialog from "./FilteredDeckDialog.svelte";
+    import ProfileSwitcher from "./ProfileSwitcher.svelte";
     import { IMPORT_EXTENSIONS, importTargetFor } from "./import";
     import { backupNow, runCheckDatabase, runCreateBackup } from "./maintenance";
     import StudyDeckDialog from "./StudyDeckDialog.svelte";
@@ -57,6 +58,7 @@ and report through a notice.
         | { kind: "checkMedia" }
         | { kind: "emptyCards"; report: EmptyCardsReport }
         | { kind: "studyDeck" }
+        | { kind: "switchProfile" }
         | { kind: "text"; title: string; text: string };
 
     let dialog: Dialog | null = null;
@@ -158,6 +160,9 @@ and report through a notice.
             case "studyDeck":
                 dialog = { kind: "studyDeck" };
                 break;
+            case "switchProfile":
+                dialog = { kind: "switchProfile" };
+                break;
             case "filteredDeck":
                 dialog = { kind: "filteredDeck", deckId: forDeck ?? 0n };
                 break;
@@ -227,6 +232,8 @@ and report through a notice.
             dispatch("select", e.detail);
         }}
     />
+{:else if dialog?.kind === "switchProfile"}
+    <ProfileSwitcher on:close={close} on:notify={(e) => dispatch("notify", e.detail)} />
 {:else if dialog?.kind === "text"}
     <TextDialog title={dialog.title} text={dialog.text} on:close={close} />
 {/if}

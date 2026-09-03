@@ -27,6 +27,14 @@ test.describe("adding and editing notes", () => {
         const editor = editorFrame(page);
         await expect(editor.locator(".field-container").first()).toBeVisible({ timeout: 20_000 });
 
+        // The editor remembers the last note type and deck; pin both so the
+        // second pass over the collection (WebKit after Chromium) starts the
+        // same way.
+        await editor.locator(".chooser-button").first().click();
+        await editor.locator("button[aria-label=\"Select Basic\"]").click();
+        await editor.locator(".chooser-button").nth(1).click();
+        await editor.locator("button[aria-label=\"Select Default\"]").click();
+
         const front = editableField(editor, 0);
         const back = editableField(editor, 1);
         await front.click();

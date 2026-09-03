@@ -55,7 +55,9 @@ test.describe("tools", () => {
         const dialog = page.getByRole("dialog", { name: /Options for/ });
         const name = dialog.getByPlaceholder(/Filtered Deck/);
         await expect(name).toBeVisible();
-        await name.fill("Cram Session");
+        // Unique per run: the suite passes over one collection twice.
+        const deckName = `Cram ${Date.now() % 100000}`;
+        await name.fill(deckName);
         // The suggested search is `deck:"Default" is:due`; nothing is due in
         // the seeded collection, so take every card of the deck instead.
         const search = dialog.locator("fieldset").first().getByRole("textbox");
@@ -64,11 +66,11 @@ test.describe("tools", () => {
         await dialog.getByRole("button", { name: "Build" }).click();
         await expect(dialog).toHaveCount(0);
 
-        const row = page.locator("nav.sidebar .row", { hasText: "Cram Session" });
+        const row = page.locator("nav.sidebar .row", { hasText: deckName });
         await expect(row).toBeVisible({ timeout: 10_000 });
         await expect(row).toHaveClass(/filtered/);
         await expect(row).toHaveClass(/current/);
-        await expect(page.locator(".overview h1")).toHaveText("Cram Session");
+        await expect(page.locator(".overview h1")).toHaveText(deckName);
         await expect(page.getByRole("button", { name: "Rebuild" })).toBeVisible();
         await expect(page.getByRole("button", { name: "Empty" })).toBeVisible();
     });

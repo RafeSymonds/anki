@@ -49,6 +49,7 @@ pub const ITEMS: &[(&str, &str, Option<&str>)] = &[
     ("create_backup", "Create Backup", None),
     ("guide", "Guide…", Some("F1")),
     ("support", "Support Anki…", None),
+    ("quit", "Quit Anki", Some("CmdOrCtrl+Q")),
 ];
 
 fn item<R: Runtime>(app: &AppHandle<R>, id: &str) -> tauri::Result<MenuItem<R>> {
@@ -79,7 +80,7 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
             &PredefinedMenuItem::hide_others(app, None)?,
             &PredefinedMenuItem::show_all(app, None)?,
             &PredefinedMenuItem::separator(app)?,
-            &PredefinedMenuItem::quit(app, None)?,
+            &item(app, "quit")?,
         ],
     )?;
     let file = Submenu::with_items(

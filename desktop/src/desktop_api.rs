@@ -83,20 +83,53 @@ pub fn handle(state: &AppState, cmd: &str, body: &[u8]) -> Reply {
             result(open_media(state, &name, cmd == "showInMediaFolder").map(|_| Value::Null))
         }
         "settingsGet" => match serde_json::from_slice::<SettingsGet>(body) {
-            Ok(req) => json(state.settings.get(req.scope, &req.key)),
+            Ok(req) => json(state.settings_get(req.scope, &req.key)),
             Err(err) => text(StatusCode::BAD_REQUEST, err.to_string()),
         },
         "settingsSet" => match serde_json::from_slice::<SettingsSet>(body) {
             Ok(req) => result(
                 state
-                    .settings
-                    .set(req.scope, &req.key, req.value)
+                    .settings_set(req.scope, &req.key, req.value)
                     .map(|_| Value::Null)
                     .map_err(|e| e.to_string()),
             ),
             Err(err) => text(StatusCode::BAD_REQUEST, err.to_string()),
         },
         // Collection close/reopen for the sync flow; see sync.rs.
+        "quit" => {
+            state.quit();
+            json(Value::Null)
+        }
+        "profiles" => json(crate::profile::profiles_json(state)),
+        "switchProfile" => {
+            let name = String::from_utf8_lossy(body).trim().to_string();
+            result(
+                crate::profile::switch_profile(state, &name)
+                    .map(|_| Value::Null)
+                    .map_err(|e| format!("{e:#}")),
+            )
+        }
+        // Test support: refill the collection with demo notes. Only under
+        // --serve, where the collection is a throwaway one.
+        "seedDemo" => {
+            if !state.in_serve_mode() {
+                return text(
+                    StatusCode::FORBIDDEN,
+                    "seeding is only available under --serve".into(),
+                );
+            }
+            let count: usize = String::from_utf8_lossy(body).trim().parse().unwrap_or(24);
+            result(
+                crate::demo::seed(&state.backend, count)
+                    .map(|_| Value::from(count as u64))
+                    .map_err(|e| e.to_string()),
+            )
+        }
+        "createBackup" => result(
+            crate::backup::create_backup(state, true)
+                .map(Value::Bool)
+                .map_err(|e| e.to_string()),
+        ),
         "closeCollection" => result(crate::sync::close_collection(state).map(|_| Value::Null)),
         "reopenCollection" => result(crate::sync::reopen_collection(state).map(|_| Value::Null)),
         "openFilePicker" => {

@@ -22,7 +22,8 @@ use tauri::http::StatusCode;
 fn open_state(dir: &Path) -> AppState {
     let backend = new_backend();
     profile::open_collection(&backend, dir).unwrap();
-    let state = AppState::new(backend, WebRoot::from_repo(), Settings::load(dir));
+    let base = dir.parent().unwrap().to_path_buf();
+    let state = AppState::new(backend, WebRoot::from_repo(), Settings::load(dir), base);
     state.set_media_dir(Some(profile::CollectionPaths::in_profile(dir).media_folder));
     state.set_profile_dir(Some(dir.to_path_buf()));
     state
@@ -66,6 +67,7 @@ fn reopening_needs_a_profile_folder() {
         backend,
         WebRoot::from_repo(),
         Settings::load(Path::new("/nonexistent")),
+        Path::new("/nonexistent").to_path_buf(),
     );
     let err = sync::reopen_collection(&state).unwrap_err();
     assert_eq!(err, "no profile open");

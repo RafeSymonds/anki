@@ -33,10 +33,23 @@ pub fn seed(backend: &Backend, count: usize) -> Result<()> {
     let basic = id_of("Basic")?;
     let cloze = id_of("Cloze")?;
 
-    let mut demo: Deck = rpc_typed(backend, "newDeck", &Empty {})?;
-    demo.name = DEMO_DECK.into();
-    let added: OpChangesWithId = rpc_typed(backend, "addDeck", &demo)?;
-    let demo_id = added.id;
+    // Reuse the demo deck when seeding more than once (tests reseed).
+    let existing: anki_proto::decks::DeckId = rpc_typed(
+        backend,
+        "getDeckIdByName",
+        &anki_proto::generic::String {
+            val: DEMO_DECK.into(),
+        },
+    )
+    .unwrap_or_default();
+    let demo_id = if existing.did != 0 {
+        existing.did
+    } else {
+        let mut demo: Deck = rpc_typed(backend, "newDeck", &Empty {})?;
+        demo.name = DEMO_DECK.into();
+        let added: OpChangesWithId = rpc_typed(backend, "addDeck", &demo)?;
+        added.id
+    };
 
     for i in 0..count {
         let (ntid, fields) = if i % 4 == 3 {
@@ -57,7 +70,11 @@ pub fn seed(backend: &Backend, count: usize) -> Result<()> {
             )
         };
         let mut note: Note = rpc_typed(backend, "newNote", &NotetypeId { ntid })?;
-        note.fields = fields;
+        // Fill the leading fields only: the user (or a test) may have added
+        // fields to the stock notetypes, and addNote wants all of them.
+        for (slot, value) in note.fields.iter_mut().zip(fields) {
+            *slot = value;
+        }
         note.tags = vec!["demo".into()];
         let deck_id = if i % 2 == 0 { 1 } else { demo_id };
         let _: AddNoteResponse = rpc_typed(

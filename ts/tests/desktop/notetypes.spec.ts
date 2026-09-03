@@ -27,12 +27,20 @@ test.describe("note types", () => {
         await expect(basic).toContainText("notes");
         await basic.click();
 
-        page.once("dialog", (dialog) => dialog.accept("Extra"));
+        // The suite runs twice over one collection (Chromium, then WebKit),
+        // so the field name is unique and the checks are relative to what is
+        // already there.
+        const fieldName = `Extra ${Date.now() % 100000}`;
+        page.once("dialog", (dialog) => dialog.accept(fieldName));
         await page.getByRole("button", { name: "Fields" }).click();
         const dialog = page.getByRole("dialog", { name: "Fields for Basic" });
-        await expect(dialog.locator(".field-row")).toHaveText(["1: Front", "2: Back"]);
+        const rows = dialog.locator(".field-row");
+        await expect(rows.first()).toHaveText("1: Front");
+        await expect(rows.nth(1)).toHaveText("2: Back");
+        const before = await rows.count();
         await dialog.getByRole("button", { name: "Add", exact: true }).click();
-        await expect(dialog.locator(".field-row")).toHaveText(["1: Front", "2: Back", "3: Extra"]);
+        await expect(rows).toHaveCount(before + 1);
+        await expect(rows.last()).toHaveText(`${before + 1}: ${fieldName}`);
         await dialog.getByRole("button", { name: "Save" }).click();
         await expect(dialog).toHaveCount(0);
         await expect(page.locator(".toast")).toContainText("saved");
@@ -40,7 +48,7 @@ test.describe("note types", () => {
         await page.locator(".titlebar").getByRole("button", { name: "Add", exact: true }).click();
         const editor = editorFrame(page);
         await expect(fieldLabel(editor, 0)).toHaveText("Front", { timeout: 20_000 });
-        await expect(fieldLabel(editor, 2)).toHaveText("Extra");
+        await expect(fieldLabel(editor, before)).toHaveText(fieldName);
     });
 
     test("renames a card type and the card type list shows the new name", async ({ page }) => {
@@ -49,15 +57,16 @@ test.describe("note types", () => {
         await page.getByRole("button", { name: "Cards" }).click();
         const dialog = page.getByRole("dialog", { name: "Card Types for Basic" });
         const cardTypes = dialog.locator("select.card-types");
-        await expect(cardTypes.locator("option")).toHaveText(["1: Card 1: Front -> Back"]);
+        await expect(cardTypes.locator("option")).toHaveText([/^1: .+: Front -> Back$/]);
         // The preview renders the empty note with the field names filled in.
         const preview = dialog.frameLocator("iframe[title=card]").locator("#qa");
         await expect(preview).toContainText("(Front)", { timeout: 20_000 });
 
-        page.once("dialog", (dialog) => dialog.accept("Recall"));
+        const newName = `Recall ${Date.now() % 100000}`;
+        page.once("dialog", (dialog) => dialog.accept(newName));
         await dialog.getByRole("button", { name: /Options/ }).click();
         await dialog.getByRole("button", { name: "Rename Card Type..." }).click();
-        await expect(cardTypes.locator("option")).toHaveText(["1: Recall: Front -> Back"]);
+        await expect(cardTypes.locator("option")).toHaveText([`1: ${newName}: Front -> Back`]);
 
         await dialog.getByRole("button", { name: "Save" }).click();
         await expect(dialog).toHaveCount(0);
@@ -66,7 +75,7 @@ test.describe("note types", () => {
         await page.getByRole("button", { name: "Cards" }).click();
         await expect(
             page.getByRole("dialog", { name: "Card Types for Basic" }).locator("select.card-types option"),
-        ).toHaveText(["1: Recall: Front -> Back"]);
+        ).toHaveText([`1: ${newName}: Front -> Back`]);
     });
 
     test("the editor's Fields button opens the dialog for its note type", async ({ page }) => {
