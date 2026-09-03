@@ -194,6 +194,38 @@ the open collection, opens the other profile's (creating the folder when new)
 and swaps the state's paths and settings. The shell then reloads the page,
 the way the Qt app closes and reopens its main window.
 
+**Look and theme.** `theme.ts` holds the palette, type and elevation as one
+stylesheet, and redefines the upstream token names from
+`ts/lib/sass/_vars.scss` at `:root:root` (the extra specificity beats the
+app's own `:root` block, whatever the source order). The shell injects it
+into its own document and into every frame it hosts — the note editor, deck
+options, statistics, the card frame — so one palette covers them all.
+`editor-theme.ts` is appended on top of the note editor's document for the
+few things worth changing there: chooser buttons, field cards, the footer.
+Both use `--app-*` names for what the upstream tokens do not cover.
+
+No page flashes white on the way in: `scheme.rs` injects a first-paint
+stylesheet and sets `night-mode` from the `#night` hash or the system
+preference in the init script, before the page's own bundle runs, and the
+window is created hidden, given `ground_color()`, then shown.
+
+**Get shared decks.** `SharedDecksScreen.svelte` (sidebar footer, the
+sidebar's + menu, Tools, and the welcome panel) explains the three steps,
+links into AnkiWeb by subject (`shared-decks.ts`), and lists the .apkg and
+.colpkg files already in Downloads so importing one is a click.
+`downloads.rs` does the scan behind `/_desktop/downloadedDecks`;
+`ANKI_DOWNLOADS_DIR` points it at another folder, which `bin/anki serve
+--fresh` sets so a test run never reads the real Downloads.
+
+**Study settings.** The overview explains how the deck is scheduled in
+plain words with its own numbers (`Overview.svelte` and
+`routes/deck-options/consequences.ts`), and Adjust studying opens
+`StudySettings.svelte`: how much a day, when a new card comes back, target
+retention when FSRS is on, how long a sitting runs, plus burying and the
+timer. It saves through `updateDeckConfigs` and `setPreferences`, the same
+calls Deck Options uses, and `study-settings.ts` holds the presets and the
+sentences that describe each choice.
+
 ## Commands
 
 ```

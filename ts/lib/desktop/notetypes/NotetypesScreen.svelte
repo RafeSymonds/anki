@@ -196,26 +196,33 @@ add_notetype_legacy does.
         display: grid;
         grid-template-columns: minmax(0, 1fr) auto;
         gap: 16px;
-        padding: 16px;
+        padding: 0 24px 24px;
         height: 100%;
         box-sizing: border-box;
     }
     .list {
         overflow: auto;
-        border: 1px solid var(--border);
-        border-radius: var(--border-radius);
-        background: var(--canvas-inset);
+        border-radius: var(--app-radius-large);
+        background: var(--app-surface);
+        box-shadow: var(--app-shadow-card);
+        padding: 8px;
     }
     .row {
         display: flex;
+        align-items: baseline;
         gap: 8px;
-        padding: 5px 10px;
+        padding: 8px 12px;
+        border-radius: var(--app-radius-small);
         cursor: default;
         user-select: none;
     }
+    .row:hover {
+        background: var(--app-surface-sunken);
+    }
     .row.selected {
-        background: var(--highlight-bg);
-        color: var(--highlight-fg);
+        background: var(--app-accent-soft);
+        color: var(--fg);
+        font-weight: 600;
     }
     .row .count {
         color: var(--fg-subtle);
@@ -235,11 +242,12 @@ add_notetype_legacy does.
     button {
         font: inherit;
         color: var(--fg);
-        background: var(--button-bg);
-        border: 1px solid var(--border);
-        border-radius: var(--border-radius);
-        padding: 5px 12px;
+        background: var(--app-surface);
+        border: 1px solid transparent;
+        border-radius: var(--app-radius);
+        padding: 7px 14px;
         cursor: pointer;
+        box-shadow: var(--app-shadow-card);
     }
     button:hover:enabled {
         border-color: var(--button-hover-border);
