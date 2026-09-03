@@ -66,6 +66,50 @@ impl WebRoot {
     fn sveltekit(&self) -> PathBuf {
         self.web.join("sveltekit")
     }
+
+    /// Where to serve from, in order: `ANKI_WEB_ROOT`, the repo's build
+    /// output when it exists (development), else the bundled resources
+    /// (`bundle.resources` in tauri.conf.json copies the web tree to
+    /// `<resources>/web`).
+    pub fn locate(resource_dir: Option<PathBuf>) -> Self {
+        if let Ok(dir) = std::env::var("ANKI_WEB_ROOT") {
+            if !dir.is_empty() {
+                return Self {
+                    web: PathBuf::from(dir),
+                };
+            }
+        }
+        let repo = Self::from_repo();
+        if repo.web.join("sveltekit/index.html").exists() {
+            return repo;
+        }
+        let resource_dir = resource_dir.or_else(|| {
+            std::env::current_exe()
+                .ok()
+                .and_then(|exe| bundle_resource_dir(&exe))
+        });
+        if let Some(dir) = resource_dir {
+            let bundled = dir.join("web");
+            if bundled.join("sveltekit/index.html").exists() {
+                return Self { web: bundled };
+            }
+        }
+        repo
+    }
+}
+
+/// `Anki.app/Contents/MacOS/anki-desktop` -> `Anki.app/Contents/Resources`,
+/// so `--serve` inside the bundle finds its resources without a Tauri app.
+pub fn bundle_resource_dir(exe: &Path) -> Option<PathBuf> {
+    let macos = exe.parent()?;
+    if macos.file_name()? != "MacOS" {
+        return None;
+    }
+    let contents = macos.parent()?;
+    if contents.file_name()? != "Contents" {
+        return None;
+    }
+    Some(contents.join("Resources"))
 }
 
 /// What a request resolves to, before any I/O happens.
@@ -502,6 +546,20 @@ mod tests {
         assert_eq!(percent_decode("100%.png"), "100%.png");
         assert_eq!(percent_decode("%E2%9C%93.png"), "✓.png");
         assert_eq!(percent_decode("plain"), "plain");
+    }
+
+    #[test]
+    fn resource_dir_from_bundle_layout() {
+        assert_eq!(
+            bundle_resource_dir(Path::new(
+                "/Applications/Anki.app/Contents/MacOS/anki-desktop"
+            )),
+            Some(PathBuf::from("/Applications/Anki.app/Contents/Resources"))
+        );
+        assert_eq!(
+            bundle_resource_dir(Path::new("/repo/target/debug/anki-desktop")),
+            None
+        );
     }
 
     #[test]

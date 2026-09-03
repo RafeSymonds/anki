@@ -13,6 +13,8 @@
 #   bin/anki sveltekit         rebuild only the SvelteKit app (the shell) without ninja
 #   bin/anki e2e-quick [port] [playwright args]   e2e without rebuilding assets
 #   bin/anki worktree-init     prepare out/ in a git worktree (shares heavy deps with the main checkout)
+#   bin/anki package           build a self-contained Anki.app and .dmg (target/release/bundle)
+#   bin/anki bench [port]      measure cold start and backend call latency in HTTP mode
 #
 # Env: ANKI_BASE (profile folder), ANKI_START_ROUTE (page to open, e.g. /congrats)
 
@@ -146,6 +148,47 @@ e2e_quick() {
         "$ROOT/out/extracted/node/bin/yarn" playwright test -c playwright.desktop.config.ts "$@"
 }
 
+package() {
+    build_web
+    echo "==> building release bundle"
+    cargo tauri build --config desktop/tauri.conf.json 2>&1 | tail -20
+    echo "bundle: $ROOT/target/release/bundle/macos/Anki.app"
+}
+
+# Cold start (process launch to /_anki/readyz) and RPC round trips against a
+# fresh seeded collection, using the same binary the app runs.
+bench() {
+    local port="${1:-40190}"
+    build_app
+    local base="$ROOT/out/anki-bench-base"
+    rm -rf "$base"
+    "$BIN" --serve "$port" --base "$base" --seed 200 >/dev/null 2>&1 &
+    local pid=$!
+    local start_ns
+    start_ns=$(python3 -c 'import time; print(time.time_ns())')
+    until curl -s -o /dev/null "http://127.0.0.1:$port/_anki/readyz"; do sleep 0.02; done
+    local ready_ns
+    ready_ns=$(python3 -c 'import time; print(time.time_ns())')
+    echo "cold start to ready: $(( (ready_ns - start_ns) / 1000000 )) ms (includes seeding 200 notes)"
+    python3 - "$port" <<'PY'
+import sys, time, urllib.request
+port = sys.argv[1]
+def post(method, body=b"", n=50):
+    times = []
+    for _ in range(n):
+        t = time.perf_counter()
+        urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:{port}/_anki/{method}", data=body, method="POST")).read()
+        times.append((time.perf_counter() - t) * 1000)
+    times.sort()
+    return times[len(times)//2], times[int(len(times)*0.95)]
+for method in ["getQueuedCards", "deckTree", "congratsInfo", "studiedToday"]:
+    med, p95 = post(method)
+    print(f"{method:16s} median {med:6.2f} ms   p95 {p95:6.2f} ms")
+t = time.perf_counter(); urllib.request.urlopen(f"http://127.0.0.1:{port}/").read(); print(f"{'index.html':16s} {(time.perf_counter()-t)*1000:6.2f} ms")
+PY
+    kill "$pid" 2>/dev/null
+}
+
 status() {
     if is_running; then
         echo "running (pid $(pid))"
@@ -167,8 +210,10 @@ case "${1:-}" in
     sveltekit) sveltekit_build ;;
     e2e-quick) shift; e2e_quick "$@" ;;
     worktree-init) worktree_init ;;
+    package) package ;;
+    bench) shift; bench "$@" ;;
     *)
-        sed -n '2,17p' "$0"
+        sed -n '2,19p' "$0"
         exit 2
         ;;
 esac

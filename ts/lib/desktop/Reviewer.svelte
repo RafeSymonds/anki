@@ -33,6 +33,8 @@ Edit, Undo and the card actions menu.
     const stopTimerOnAnswer = controller.stopTimerOnAnswer;
     const notice = controller.notice;
     const currentCard = controller.currentCard;
+    const autoAdvance = controller.autoAdvance;
+    const timeboxHit = controller.timeboxHit;
 
     let frame: CardFrame;
     let editor: EditorPanel | undefined;
@@ -75,7 +77,24 @@ Edit, Undo and the card actions menu.
         ["6", () => controller.seekAudio(-5)],
         ["7", () => controller.seekAudio(5)],
         ["Escape", () => void closeEditor()],
+        ["Shift+A", () => controller.toggleAutoAdvance()],
     ]);
+
+    /** `check_timebox` in reviewer.py: Continue keeps studying, Finish leaves. */
+    async function onTimebox(hit: { minutes: number; cards: number }): Promise<void> {
+        const message = tr.studyingCardStudiedInMinute({ cards: hit.cards, minutes: String(hit.minutes) });
+        const keepGoing = confirm(`${message}\n\nOK: ${tr.studyingContinue()}   Cancel: ${tr.studyingFinish()}`);
+        if (keepGoing) {
+            await controller.continueAfterTimebox();
+        } else {
+            timeboxHit.set(null);
+            dispatch("finished");
+        }
+    }
+
+    $: if ($timeboxHit) {
+        void onTimebox($timeboxHit);
+    }
 
     export function handleKey(event: KeyboardEvent): boolean {
         if (isTypingTarget(event.target)) {
@@ -349,6 +368,15 @@ Edit, Undo and the card actions menu.
                         >
                             {tr.actionsReplayAudio()}
                             <kbd>R</kbd>
+                        </button>
+                        <button
+                            on:click={() => {
+                                menuOpen = false;
+                                controller.toggleAutoAdvance();
+                            }}
+                        >
+                            {$autoAdvance ? "✓ " : ""}{tr.actionsAutoAdvance()}
+                            <kbd>{shortcutLabel("Shift+A")}</kbd>
                         </button>
                         <button
                             on:click={() => {

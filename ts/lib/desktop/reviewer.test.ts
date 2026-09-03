@@ -12,7 +12,22 @@ import {
 } from "@generated/anki/scheduler_pb";
 import { describe, expect, it } from "vitest";
 
-import { buildCardAnswer, countsForQueue, currentDeckId, ratingFromEase, stateForEase, userFlag } from "./reviewer";
+import {
+    DeckConfig_Config_AnswerAction as AnswerAction,
+    DeckConfig_Config_QuestionAction as QuestionAction,
+} from "@generated/anki/deck_config_pb";
+
+import {
+    answerTimeoutStep,
+    buildCardAnswer,
+    countsForQueue,
+    currentDeckId,
+    questionTimeoutStep,
+    ratingFromEase,
+    stateForEase,
+    timeboxReached,
+    userFlag,
+} from "./reviewer";
 
 function states(): SchedulingStates {
     const state = (secs: number) =>
@@ -81,5 +96,29 @@ describe("card helpers", () => {
         expect(currentDeckId(card)).toBe(5n);
         const filtered = new Card({ deckId: 7n, originalDeckId: 5n });
         expect(currentDeckId(filtered)).toBe(5n);
+    });
+});
+
+describe("timebox", () => {
+    it("is off without a limit and fires once the limit has passed", () => {
+        expect(timeboxReached(null, 1000, 5)).toBeNull();
+        expect(timeboxReached({ startedAt: 0, startReps: 0, limitSecs: 0 }, 10_000_000, 5)).toBeNull();
+        const box = { startedAt: 0, startReps: 3, limitSecs: 600 };
+        expect(timeboxReached(box, 599_000, 10)).toBeNull();
+        expect(timeboxReached(box, 601_000, 10)).toEqual({ minutes: 10, cards: 7 });
+    });
+});
+
+describe("auto advance", () => {
+    it("maps deck options onto the reviewer's steps", () => {
+        expect(questionTimeoutStep(QuestionAction.SHOW_ANSWER)).toEqual({ kind: "showAnswer" });
+        expect(questionTimeoutStep(undefined)).toEqual({ kind: "showAnswer" });
+        expect(questionTimeoutStep(QuestionAction.SHOW_REMINDER)).toEqual({ kind: "reminder" });
+        expect(answerTimeoutStep(AnswerAction.BURY_CARD)).toEqual({ kind: "bury" });
+        expect(answerTimeoutStep(AnswerAction.ANSWER_AGAIN)).toEqual({ kind: "answer", ease: 1 });
+        expect(answerTimeoutStep(AnswerAction.ANSWER_HARD)).toEqual({ kind: "answer", ease: 2 });
+        expect(answerTimeoutStep(AnswerAction.ANSWER_GOOD)).toEqual({ kind: "answer", ease: 3 });
+        expect(answerTimeoutStep(AnswerAction.SHOW_REMINDER)).toEqual({ kind: "reminder" });
+        expect(answerTimeoutStep(undefined)).toEqual({ kind: "bury" });
     });
 });

@@ -124,7 +124,7 @@ fn collection_is_empty(backend: &Backend) -> bool {
 }
 
 /// Open the default profile's collection and build the shared state.
-pub fn open_state(options: &Options) -> AppState {
+pub fn open_state(options: &Options, web: WebRoot) -> AppState {
     let backend = new_backend();
     let base = options.base.clone().unwrap_or_else(profile::base_dir);
     let profile_dir = profile::default_profile_dir(&base);
@@ -144,7 +144,7 @@ pub fn open_state(options: &Options) -> AppState {
     }
 
     let settings = Settings::load(&profile_dir);
-    let state = AppState::new(backend, WebRoot::from_repo(), settings);
+    let state = AppState::new(backend, web, settings);
     state.set_media_dir(Some(
         profile::CollectionPaths::in_profile(&profile_dir).media_folder,
     ));
@@ -152,33 +152,45 @@ pub fn open_state(options: &Options) -> AppState {
 }
 
 pub fn run(options: Options) {
-    let state = open_state(&options);
     match options.serve {
         Some(port) => {
+            let state = open_state(&options, WebRoot::locate(None));
+            eprintln!("serving web assets from {}", state.web.web.display());
             http::serve(Arc::new(state), port).expect("http server");
         }
-        None => run_window(state),
+        None => run_window(options),
     }
 }
 
-fn run_window(state: AppState) {
+fn run_window(options: Options) {
+    use tauri::Manager;
+
+    // Build the app first so the bundled resource folder can be resolved,
+    // then open the collection and only then create the window.
     let app = tauri::Builder::default()
-        .manage(state)
         .register_uri_scheme_protocol("anki", scheme::handle)
-        .setup(|app| {
-            tauri::Manager::state::<AppState>(app).set_app_handle(app.handle().clone());
-            let url = format!("anki://localhost{}", start_route());
-            WebviewWindowBuilder::new(app, "main", WebviewUrl::CustomProtocol(url.parse()?))
-                .title("Anki")
-                .inner_size(1180.0, 780.0)
-                .min_inner_size(760.0, 500.0)
-                .title_bar_style(TitleBarStyle::Overlay)
-                .hidden_title(true)
-                .build()?;
-            Ok(())
-        })
         .build(tauri::generate_context!())
         .expect("failed to build Anki");
+
+    let resource_dir = app.path().resource_dir().ok();
+    let state = open_state(&options, WebRoot::locate(resource_dir));
+    eprintln!("serving web assets from {}", state.web.web.display());
+    state.set_app_handle(app.handle().clone());
+    app.manage(state);
+
+    let url = format!("anki://localhost{}", start_route());
+    WebviewWindowBuilder::new(
+        &app,
+        "main",
+        WebviewUrl::CustomProtocol(url.parse().expect("start url")),
+    )
+    .title("Anki")
+    .inner_size(1180.0, 780.0)
+    .min_inner_size(760.0, 500.0)
+    .title_bar_style(TitleBarStyle::Overlay)
+    .hidden_title(true)
+    .build()
+    .expect("failed to create the main window");
 
     app.run(|app, event| {
         if let RunEvent::Exit = event {

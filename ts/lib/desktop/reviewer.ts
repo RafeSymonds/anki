@@ -11,6 +11,10 @@ import type { AVTag } from "@generated/anki/card_rendering_pb";
 import type { Card } from "@generated/anki/cards_pb";
 import { ConfigKey_Bool } from "@generated/anki/config_pb";
 import type { DeckConfig_Config } from "@generated/anki/deck_config_pb";
+import {
+    DeckConfig_Config_AnswerAction as AnswerAction,
+    DeckConfig_Config_QuestionAction as QuestionAction,
+} from "@generated/anki/deck_config_pb";
 import { SchedulingStatesWithContext, SetSchedulingStatesRequest } from "@generated/anki/frontend_pb";
 import { Empty } from "@generated/anki/generic_pb";
 import type { Note } from "@generated/anki/notes_pb";
@@ -165,6 +169,54 @@ export function answerLabels(): [string, string, string, string] {
     return [tr.studyingAgain(), tr.studyingHard(), tr.studyingGood(), tr.studyingEasy()];
 }
 
+export interface Timebox {
+    startedAt: number;
+    startReps: number;
+    limitSecs: number;
+}
+
+export interface TimeboxHit {
+    minutes: number;
+    cards: number;
+}
+
+/** `Collection.timeboxReached` in pylib: null until the limit has passed. */
+export function timeboxReached(box: Timebox | null, now: number, reps: number): TimeboxHit | null {
+    if (!box || !box.limitSecs) {
+        return null;
+    }
+    const elapsed = (now - box.startedAt) / 1000;
+    if (elapsed > box.limitSecs) {
+        return { minutes: Math.round(box.limitSecs / 60), cards: reps - box.startReps };
+    }
+    return null;
+}
+
+export type AdvanceStep = { kind: "showAnswer" } | { kind: "answer"; ease: Ease } | { kind: "bury" } | {
+    kind: "reminder";
+};
+
+/** What auto-advance does when the question timer runs out (reviewer.py `_on_show_answer_timeout`). */
+export function questionTimeoutStep(action: QuestionAction | undefined): AdvanceStep {
+    return action === QuestionAction.SHOW_REMINDER ? { kind: "reminder" } : { kind: "showAnswer" };
+}
+
+/** What auto-advance does when the answer timer runs out (reviewer.py `_on_show_question_timeout`). */
+export function answerTimeoutStep(action: AnswerAction | undefined): AdvanceStep {
+    switch (action) {
+        case AnswerAction.ANSWER_AGAIN:
+            return { kind: "answer", ease: 1 };
+        case AnswerAction.ANSWER_HARD:
+            return { kind: "answer", ease: 2 };
+        case AnswerAction.ANSWER_GOOD:
+            return { kind: "answer", ease: 3 };
+        case AnswerAction.SHOW_REMINDER:
+            return { kind: "reminder" };
+        default:
+            return { kind: "bury" };
+    }
+}
+
 interface Rendered {
     css: string;
     question: string;
@@ -193,6 +245,9 @@ export class ReviewerController {
     readonly notice: Writable<string | null> = writable(null);
     /** The card being shown, for the edit panel. */
     readonly currentCard: Writable<Card | null> = writable(null);
+    readonly autoAdvance: Writable<boolean> = writable(false);
+    /** Set when the timebox limit passes; the UI asks whether to continue. */
+    readonly timeboxHit: Writable<TimeboxHit | null> = writable(null);
 
     card: Card | null = null;
     private note: Note | null = null;
@@ -214,6 +269,11 @@ export class ReviewerController {
     private showIntervals = true;
     private nightMode = false;
     private running = false;
+    private reps = 0;
+    private timeLimitSecs = 0;
+    private timebox: Timebox | null = null;
+    private advanceTimer: ReturnType<typeof setTimeout> | undefined;
+    private pendingAdvance: (() => void) | null = null;
     /** Called when the queue runs dry. */
     onFinished: (() => void) | null = null;
 
@@ -247,11 +307,20 @@ export class ReviewerController {
             ),
         );
         await this.loadPrefs();
+        this.startTimebox();
+        avPlayer.onQueueEnded = () => {
+            const pending = this.pendingAdvance;
+            this.pendingAdvance = null;
+            pending?.();
+        };
         await this.nextCard();
     }
 
     stop(): void {
         this.running = false;
+        this.clearAdvanceTimer();
+        avPlayer.onQueueEnded = null;
+        this.autoAdvance.set(false);
         for (const fn of this.unregister) {
             fn();
         }
@@ -294,6 +363,19 @@ export class ReviewerController {
         this.showIntervals = (config.estTimes as boolean | undefined) ?? true;
         this.showCounts.set((config.dueCounts as boolean | undefined) ?? true);
         this.stateMutationJs = (config.cardStateCustomizer as string | undefined) ?? "";
+        this.timeLimitSecs = (config.timeLim as number | undefined) ?? 0;
+    }
+
+    /** `Collection.startTimebox` in pylib. */
+    startTimebox(): void {
+        this.timebox = { startedAt: Date.now(), startReps: this.reps, limitSecs: this.timeLimitSecs };
+    }
+
+    /** The user chose to keep going after the timebox prompt. */
+    async continueAfterTimebox(): Promise<void> {
+        this.timeboxHit.set(null);
+        this.startTimebox();
+        await this.nextCard();
     }
 
     private async configBool(key: ConfigKey_Bool): Promise<boolean> {
@@ -417,6 +499,7 @@ export class ReviewerController {
         this.view.drawMark(get(this.marked));
         this.buttons.set([]);
         this.runStateMutation();
+        this.scheduleAdvance(this.config?.secondsToShowQuestion ?? 0, () => this.onQuestionTimeout());
     }
 
     private async typeAnswerQuestion(text: string): Promise<string> {
@@ -479,6 +562,7 @@ export class ReviewerController {
             avPlayer.playTags(this.rendered.answerTags);
         }
         await this.presentAnswer();
+        this.scheduleAdvance(this.config?.secondsToShowAnswer ?? 0, () => this.onAnswerTimeout());
     }
 
     private async presentAnswer(): Promise<void> {
@@ -531,11 +615,91 @@ export class ReviewerController {
         }
         const answer = buildCardAnswer(card.id, this.states, ease, Date.now(), Date.now() - this.timerStarted);
         this.state.set("transition");
+        this.clearAdvanceTimer();
         await answerCard(answer);
+        this.reps += 1;
         if (answer.newState && (await stateIsLeech(answer.newState)).val) {
             this.notice.set(tr.studyingCardWasALeech());
         }
+        // `check_timebox` in reviewer.py: pause for the prompt instead of moving on.
+        const hit = timeboxReached(this.timebox, Date.now(), this.reps);
+        if (hit) {
+            this.timeboxHit.set(hit);
+            return;
+        }
         await this.nextCard();
+    }
+
+    // ---- auto advance ----
+
+    toggleAutoAdvance(): void {
+        const enabled = !get(this.autoAdvance);
+        this.autoAdvance.set(enabled);
+        this.notice.set(enabled ? tr.actionsAutoAdvanceActivated() : tr.actionsAutoAdvanceDeactivated());
+        if (!enabled) {
+            this.clearAdvanceTimer();
+        } else if (get(this.state) === "question") {
+            this.scheduleAdvance(this.config?.secondsToShowQuestion ?? 0, () => this.onQuestionTimeout());
+        } else if (get(this.state) === "answer") {
+            this.scheduleAdvance(this.config?.secondsToShowAnswer ?? 0, () => this.onAnswerTimeout());
+        }
+    }
+
+    private clearAdvanceTimer(): void {
+        clearTimeout(this.advanceTimer);
+        this.advanceTimer = undefined;
+        this.pendingAdvance = null;
+    }
+
+    private scheduleAdvance(seconds: number, action: () => void): void {
+        this.clearAdvanceTimer();
+        if (!get(this.autoAdvance) || !seconds) {
+            return;
+        }
+        this.advanceTimer = setTimeout(() => this.runAdvance(action), seconds * 1000);
+    }
+
+    /** Honour "wait for audio" and switch auto-advance off when the app is
+     * in the background, like the Qt reviewer. */
+    private runAdvance(action: () => void): void {
+        if (!this.card || !get(this.autoAdvance)) {
+            return;
+        }
+        if ((this.config?.waitForAudio ?? false) && avPlayer.playing) {
+            this.pendingAdvance = () => this.runAdvance(action);
+            return;
+        }
+        if (typeof document !== "undefined" && !document.hasFocus()) {
+            this.autoAdvance.set(false);
+            return;
+        }
+        action();
+    }
+
+    private onQuestionTimeout(): void {
+        const step = questionTimeoutStep(this.config?.questionAction);
+        if (step.kind === "showAnswer") {
+            void this.showAnswer();
+        } else {
+            this.notice.set(tr.studyingQuestionTimeElapsed());
+        }
+    }
+
+    private onAnswerTimeout(): void {
+        const step = answerTimeoutStep(this.config?.answerAction);
+        switch (step.kind) {
+            case "answer":
+                void this.answer(step.ease);
+                break;
+            case "bury":
+                void this.buryCard();
+                break;
+            case "reminder":
+                this.notice.set(tr.studyingAnswerTimeElapsed());
+                break;
+            default:
+                break;
+        }
     }
 
     /** Enter/space: reveal the answer, or rate Good once it is shown. */
