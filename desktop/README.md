@@ -17,8 +17,10 @@ desktop/                     Rust crate `anki-desktop` (Tauri app + HTTP mode)
   src/profile.rs             data folder, profile folders, open/close collection
   src/http.rs                loopback HTTP server for `anki-desktop --serve PORT`
   src/demo.rs                demo notes for dev/e2e collections
+  src/menu.rs                native menu bar; choices run window.__ankiMenu(id) in the shell
   web/card.html              the document cards render in (loads js/reviewer.js)
   tests/backend.rs           integration tests against a temporary collection
+  tests/simulation.rs        seeded random operation sequences with invariants (ANKI_SIM_SEED/STEPS)
   examples/seed.rs           `cargo run -p anki-desktop --example seed -- <profile dir>`
 ts/lib/desktop/              the Svelte app shell (mounted by ts/routes/+page.svelte)
   App.svelte                 shell: sidebar + screens (overview, review, add, embedded page)
@@ -34,9 +36,10 @@ ts/lib/desktop/              the Svelte app shell (mounted by ts/routes/+page.sv
   rpc-events.ts              "a backend call ran" notifications (stand-in for operation_did_execute)
   desktop-api.ts             calls to /_desktop/* (native side)
   decks.ts, card-html.ts, audio.ts, shortcuts.ts   pure logic with vitest tests next to them
-ts/tests/desktop/            Playwright e2e specs (run against `anki-desktop --serve`)
+ts/tests/desktop/            Playwright e2e specs (run against `anki-desktop --serve`);
+                             monkey.spec.ts is a seeded UI random walk (ANKI_MONKEY_SEED/STEPS)
 playwright.desktop.config.ts
-bin/anki                     start/stop/restart/status/serve/e2e/build/logs
+bin/anki                     start/stop/restart/status/serve/e2e/build/logs/package/bench
 ```
 
 ## How the pieces talk
@@ -108,6 +111,11 @@ bin/anki start [--build]      build (web with --build) and launch the window
 bin/anki stop | status | restart | logs
 bin/anki serve [port] [--fresh]   HTTP mode; --fresh seeds out/anki-e2e-base
 bin/anki e2e                  Playwright e2e (= just test-e2e-desktop)
+bin/anki sveltekit            rebuild only the SvelteKit app (the shell) without ninja, ~35 s
+bin/anki e2e-quick [port] [spec]   e2e without rebuilding assets (pair with `bin/anki sveltekit`)
+bin/anki package              self-contained Anki.app and .dmg in target/release/bundle
+bin/anki bench                cold start and backend round-trip latency
+bin/anki worktree-init        prepare a git worktree to build and test on its own
 just web                      build the web assets the app serves
 cargo test -p anki-desktop    Rust unit + integration tests
 yarn vitest run lib/desktop   shell unit tests (use out/extracted/node/bin/yarn)
@@ -119,7 +127,16 @@ just lint                     the full lint suite (clippy, mypy, ruff, eslint, s
 
 `ANKI_BASE` chooses the data folder (bin/anki defaults it to
 `out/anki-dev-base` so a dev build never touches the real collection);
-`ANKI_START_ROUTE=/congrats` opens the window on one route.
+`ANKI_START_ROUTE=/congrats` opens the window on one route;
+`ANKI_WEB_ROOT` overrides where web assets are served from. The packaged
+app resolves them from its Resources folder (`bundle.resources` in
+tauri.conf.json).
+
+Working in a git worktree (several people or agents at once): run
+`bin/anki worktree-init` there, use `bin/anki sveltekit` and
+`bin/anki e2e-quick <port>` instead of the ninja-based recipes, and pick a
+distinct port per worktree. The ninja build in the main checkout ignores
+`.claude/`, where agent worktrees live.
 
 ## Conventions
 
