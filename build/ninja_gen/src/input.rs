@@ -130,9 +130,13 @@ fn cache_files() -> Vec<Utf8PathBuf> {
         .sort_by_file_name()
         .into_iter()
         .filter_entry(move |e| {
-            // don't walk into symlinks, or the top-level out/, or .git
+            // don't walk into symlinks, or the top-level out/, .git, or
+            // .claude (agent worktrees live there and contain their own trees)
             !(e.path_is_symlink()
-                || (e.depth() == 1 && (e.file_name() == "out" || e.file_name() == ".git")))
+                || (e.depth() == 1
+                    && (e.file_name() == "out"
+                        || e.file_name() == ".git"
+                        || e.file_name() == ".claude")))
         })
         .filter_map(move |e| {
             let path = e.as_ref().unwrap().path().strip_prefix("./").unwrap();
