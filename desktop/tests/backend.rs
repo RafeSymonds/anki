@@ -67,6 +67,31 @@ fn opens_a_fresh_collection_and_serves_rpcs() {
 }
 
 #[test]
+fn missing_config_keys_read_as_null_like_mediasrv() {
+    let dir = tempfile::tempdir().unwrap();
+    let backend = new_backend();
+    profile::open_collection(&backend, dir.path()).unwrap();
+
+    let key = |val: &str| anki_proto::generic::String { val: val.into() };
+    // The editor asks for keys that only exist once set (mediasrv.py::get_config_json).
+    let missing: Json = rpc::call_typed(&backend, "getConfigJson", &key("renderMathjax")).unwrap();
+    assert_eq!(missing.json, b"null");
+    // Keys that exist keep their value.
+    let sort: Json = rpc::call_typed(&backend, "getConfigJson", &key("sortType")).unwrap();
+    assert_eq!(sort.json, b"\"noteFld\"");
+    // Other not-found errors still surface.
+    let err = rpc::call_typed::<_, anki_proto::cards::Card>(
+        &backend,
+        "getCard",
+        &anki_proto::cards::CardId { cid: 1 },
+    )
+    .unwrap_err();
+    assert!(!err.message().is_empty());
+
+    profile::close_collection(&backend).unwrap();
+}
+
+#[test]
 fn unknown_method_is_reported_by_name() {
     let backend = new_backend();
     let err = rpc::call(&backend, "noSuchMethod", &[]).unwrap_err();

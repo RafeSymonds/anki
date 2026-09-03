@@ -104,6 +104,25 @@ pub fn call(backend: &Backend, name: &str, input: &[u8]) -> Result<Vec<u8>, RpcE
                 }
             }))
         })
+        .or_else(|err| missing_config_as_null(name, err))
+}
+
+/// The web code reads collection config keys that may not exist yet
+/// (renderMathjax, activeCols, ...). The Python media server answered those
+/// with JSON null (mediasrv.py::get_config_json); rslib reports a not-found
+/// error, which the pages would show as an alert.
+fn missing_config_as_null(name: &str, err: RpcError) -> Result<Vec<u8>, RpcError> {
+    match &err {
+        RpcError::Backend(backend_err)
+            if name == "getConfigJson" && backend_err.kind() == Kind::NotFoundError =>
+        {
+            Ok(anki_proto::generic::Json {
+                json: b"null".to_vec(),
+            }
+            .encode_to_vec())
+        }
+        _ => Err(err),
+    }
 }
 
 /// Typed helper for calls made from Rust itself.
