@@ -183,7 +183,7 @@ fn run_window(options: Options) {
     use tauri::Manager;
 
     let app = tauri::Builder::default()
-        .register_uri_scheme_protocol("anki", scheme::handle)
+        .register_asynchronous_uri_scheme_protocol("anki", scheme::handle_async)
         .setup(move |app| {
             // The bundle's resource folder is only resolvable once the app
             // exists, so the collection is opened here, before the window.

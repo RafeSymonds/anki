@@ -9,7 +9,7 @@ active.
 <script lang="ts">
     import type { DeckTreeNode } from "@generated/anki/decks_pb";
     import { SyncStatusResponse_Required } from "@generated/anki/sync_pb";
-    import { buildSearchString, studiedToday } from "@generated/backend";
+    import { buildSearchString, redo, studiedToday, undo } from "@generated/backend";
     import * as tr from "@generated/ftl";
     import { onDestroy, onMount } from "svelte";
 
@@ -27,9 +27,15 @@ active.
     } from "./decks";
     import DeckSidebar from "./DeckSidebar.svelte";
     import EditorPanel, { editorNoteInfo } from "./EditorPanel.svelte";
-    import { reopenCollection, settingsGet, settingsSet } from "./desktop-api";
+    import {
+        openLink,
+        reopenCollection,
+        settingsGet,
+        settingsSet,
+    } from "./desktop-api";
     import EmbeddedPage from "./EmbeddedPage.svelte";
     import { installFrontendService } from "./frontend-service";
+    import { installMenuHandlers } from "./menu-actions";
     import NotetypeDialogs from "./notetypes/NotetypeDialogs.svelte";
     import NotetypesScreen from "./notetypes/NotetypesScreen.svelte";
     import Overview from "./Overview.svelte";
@@ -235,6 +241,65 @@ active.
         void refreshDecks();
     }
 
+    // Edit > Undo/Redo from the native menu: the collection-level undo,
+    // wherever the user is (Ctrl+Z inside a text field stays text undo).
+    async function menuUndo(): Promise<void> {
+        try {
+            const result = await undo({}, { alertOnError: false });
+            showToast(tr.undoUndoAction({ val: result.operation }));
+        } catch {
+            showToast(tr.actionsNothingToUndo());
+            return;
+        }
+        await controller.refresh();
+        await refreshDecks();
+    }
+
+    async function menuRedo(): Promise<void> {
+        try {
+            const result = await redo({}, { alertOnError: false });
+            showToast(tr.undoRedoAction({ action: result.operation }));
+        } catch {
+            showToast(tr.actionsNothingToRedo());
+            return;
+        }
+        await controller.refresh();
+        await refreshDecks();
+    }
+
+    let uninstallMenu: (() => void) | undefined;
+
+    function installMenu(): void {
+        uninstallMenu = installMenuHandlers(
+            {
+                preferences: () => tools?.run("preferences"),
+                sync: () => void sync.sync(),
+                switch_profile: () =>
+                    showToast("Switching profiles is not available yet"),
+                import: () => tools?.run("import"),
+                export: () => tools?.run("export"),
+                undo: menuUndo,
+                redo: menuRedo,
+                decks: () => {
+                    screen = { kind: "overview" };
+                },
+                add: openAdd,
+                browse: () => openBrowser(),
+                stats: () => tools?.run("stats"),
+                study_deck: () => tools?.run("studyDeck"),
+                create_filtered_deck: () => tools?.run("filteredDeck"),
+                note_types: openNotetypes,
+                check_database: () => tools?.run("checkDatabase"),
+                check_media: () => tools?.run("checkMedia"),
+                empty_cards: () => tools?.run("emptyCards"),
+                create_backup: () => tools?.run("createBackup"),
+                guide: () => void openLink("https://docs.ankiweb.net/"),
+                support: () => void openLink("https://faqs.ankiweb.net/"),
+            },
+            (id) => showToast(`Unhandled menu item: ${id}`),
+        );
+    }
+
     async function onCreateDeck(): Promise<void> {
         const name = prompt(tr.decksNewDeckName(), "");
         if (!name?.trim()) {
@@ -349,6 +414,7 @@ active.
     onMount(async () => {
         installFrontendService();
         installRpcDoneHook();
+        installMenu();
         uninstallServices = installShellServices({
             notify: showToast,
             askUser: async (text) => confirm(text),
@@ -385,6 +451,7 @@ active.
     });
 
     onDestroy(() => {
+        uninstallMenu?.();
         darkQuery.removeEventListener("change", applyTheme);
         window.removeEventListener("keydown", onKeydown);
         uninstallServices?.();

@@ -148,8 +148,7 @@ actions with their Qt shortcuts (qt/aqt/browser/browser.py).
     }
 
     // Actions
-    ////////////////////////////////////////////////////////////////////////
-
+    // ---
     async function saveEditor(): Promise<void> {
         await editor?.saveNow();
     }
@@ -451,8 +450,7 @@ actions with their Qt shortcuts (qt/aqt/browser/browser.py).
     }
 
     // Keyboard
-    ////////////////////////////////////////////////////////////////////////
-
+    // ---
     const shortcuts = new ShortcutMap().addAll([
         ["Ctrl+d", () => void changeDeck()],
         ["Ctrl+1", () => void setFlag(1)],
@@ -589,8 +587,7 @@ actions with their Qt shortcuts (qt/aqt/browser/browser.py).
     }
 
     // Menus
-    ////////////////////////////////////////////////////////////////////////
-
+    // ---
     $: notesMenu = [
         {
             label: tr.browsingAddTags2(),
@@ -719,8 +716,7 @@ actions with their Qt shortcuts (qt/aqt/browser/browser.py).
     }
 
     // Lifecycle
-    ////////////////////////////////////////////////////////////////////////
-
+    // ---
     function scheduleSidebarRefresh(): void {
         clearTimeout(sidebarTimer);
         sidebarTimer = setTimeout(() => void controller.refreshSidebar(), 500);

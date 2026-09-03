@@ -216,11 +216,29 @@ pub fn safe_media_path(name: &str) -> bool {
 
 pub type Reply = Response<Cow<'static, [u8]>>;
 
-/// Tauri entry point for the `anki://` scheme.
+/// Tauri entry point for the `anki://` scheme (synchronous form).
 pub fn handle<R: tauri::Runtime>(ctx: UriSchemeContext<'_, R>, req: Request<Vec<u8>>) -> Reply {
     let state = ctx.app_handle().state::<AppState>();
     let path = req.uri().path().to_string();
     dispatch(&state, req.method(), &path, req.body())
+}
+
+/// Asynchronous entry point: every request runs on its own thread, so a
+/// long backend call (a sync, a database check) never blocks the main
+/// thread that WKWebView paints and dispatches events on. Native dialogs
+/// still hop to the main thread through the app handle.
+pub fn handle_async<R: tauri::Runtime>(
+    ctx: UriSchemeContext<'_, R>,
+    req: Request<Vec<u8>>,
+    responder: tauri::UriSchemeResponder,
+) {
+    let app = ctx.app_handle().clone();
+    std::thread::spawn(move || {
+        let state = app.state::<AppState>();
+        let path = req.uri().path().to_string();
+        let reply = dispatch(&state, req.method(), &path, req.body());
+        responder.respond(reply);
+    });
 }
 
 /// Answer one request. Shared by the scheme handler and the HTTP server.
