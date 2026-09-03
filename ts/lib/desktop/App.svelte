@@ -641,6 +641,7 @@ active.
                 <NotetypesScreen
                     version={notetypesVersion}
                     on:fields={(e) => notetypeDialogs.openFields(e.detail)}
+                    on:options={(e) => notetypeDialogs.openOptions(e.detail)}
                     on:cards={(e) =>
                         notetypeDialogs.openCards({
                             notetypeId: e.detail,

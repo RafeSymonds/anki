@@ -22,13 +22,19 @@ type list and the editor's Fields.../Cards... buttons open the same dialogs.
 
     import CardLayout from "./CardLayout.svelte";
     import FieldsDialog from "./FieldsDialog.svelte";
+    import OptionsDialog from "./OptionsDialog.svelte";
 
     export let nightMode = false;
 
     const dispatch = createEventDispatcher<{ saved: void; notify: string }>();
 
     let fieldsFor: bigint | null = null;
+    let optionsFor: bigint | null = null;
     let cards: CardLayoutArgs | null = null;
+
+    export function openOptions(notetypeId: bigint): void {
+        optionsFor = notetypeId;
+    }
 
     export function openFields(notetypeId: bigint): void {
         fieldsFor = notetypeId;
@@ -43,6 +49,13 @@ type list and the editor's Fields.../Cards... buttons open the same dialogs.
     <FieldsDialog
         notetypeId={fieldsFor}
         on:close={() => (fieldsFor = null)}
+        on:saved={() => dispatch("saved")}
+    />
+{/if}
+{#if optionsFor !== null}
+    <OptionsDialog
+        notetypeId={optionsFor}
+        on:close={() => (optionsFor = null)}
         on:saved={() => dispatch("saved")}
     />
 {/if}

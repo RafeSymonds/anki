@@ -19,6 +19,7 @@
 
 import type { Notetype } from "@generated/anki/notetypes_pb";
 import {
+    Notetype_Config,
     Notetype_Config_Kind,
     Notetype_Field,
     Notetype_Field_Config,
@@ -357,4 +358,33 @@ function moveItem<T>(items: T[], from: number, to: number): void {
     }
     const [item] = items.splice(from, 1);
     items.splice(to, 0, item);
+}
+
+// LaTeX options (the Qt "Options..." dialog in models.py: onAdvanced)
+// ---
+
+export interface LatexOptions {
+    header: string;
+    footer: string;
+    /** Render with dvisvgm to SVG instead of PNG. */
+    svg: boolean;
+}
+
+export function latexOptions(notetype: Notetype): LatexOptions {
+    return {
+        header: notetype.config?.latexPre ?? "",
+        footer: notetype.config?.latexPost ?? "",
+        svg: notetype.config?.latexSvg ?? false,
+    };
+}
+
+/** Returns whether anything changed. */
+export function setLatexOptions(notetype: Notetype, options: LatexOptions): boolean {
+    const before = latexOptions(notetype);
+    const config = notetype.config ?? new Notetype_Config();
+    config.latexPre = options.header;
+    config.latexPost = options.footer;
+    config.latexSvg = options.svg;
+    notetype.config = config;
+    return before.header !== options.header || before.footer !== options.footer || before.svg !== options.svg;
 }

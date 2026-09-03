@@ -34,6 +34,7 @@ add_notetype_legacy does.
         fields: bigint;
         cards: bigint;
         notify: string;
+        options: bigint;
     }>();
 
     type Source = { kind: StockNotetype_Kind } | { cloneId: bigint };
@@ -171,6 +172,12 @@ add_notetype_legacy does.
             on:click={() => selected && dispatch("cards", selected.id)}
         >
             {tr.notetypesCards()}
+        </button>
+        <button
+            disabled={!selected}
+            on:click={() => selected && dispatch("options", selected.id)}
+        >
+            {tr.notetypesOptions()}
         </button>
     </div>
 </div>

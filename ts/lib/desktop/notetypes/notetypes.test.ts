@@ -24,6 +24,7 @@ import {
     fieldsOnTemplate,
     flipTemplate,
     isSortField,
+    latexOptions,
     newField,
     newTemplate,
     newTemplateName,
@@ -36,6 +37,7 @@ import {
     repositionField,
     repositionTemplate,
     setBrowserAppearance,
+    setLatexOptions,
     setSortField,
     templateMarkdown,
     templateSummary,
@@ -286,5 +288,27 @@ describe("previewTypeAnswer", () => {
         expect(previewTypeAnswer("[[type:A]] [[type:B]]", "answer", "c")).toBe(
             "c <center><b>Only one typing box per card is supported.</b></center>",
         );
+    });
+});
+
+describe("LaTeX options", () => {
+    it("reads the config with defaults and writes changes back", () => {
+        const notetype = new Notetype({ name: "Basic" });
+        expect(latexOptions(notetype)).toEqual({ header: "", footer: "", svg: false });
+
+        expect(setLatexOptions(notetype, { header: "\\documentclass{article}", footer: "\\end{document}", svg: true }))
+            .toBe(
+                true,
+            );
+        expect(notetype.config?.latexPre).toBe("\\documentclass{article}");
+        expect(notetype.config?.latexPost).toBe("\\end{document}");
+        expect(notetype.config?.latexSvg).toBe(true);
+        expect(latexOptions(notetype)).toEqual({
+            header: "\\documentclass{article}",
+            footer: "\\end{document}",
+            svg: true,
+        });
+        // Same values again: nothing changed.
+        expect(setLatexOptions(notetype, latexOptions(notetype))).toBe(false);
     });
 });

@@ -51,6 +51,29 @@ test.describe("note types", () => {
         await expect(fieldLabel(editor, before)).toHaveText(fieldName);
     });
 
+    test("options store the LaTeX header, footer and svg flag", async ({ page }) => {
+        await openNoteTypes(page);
+        await page.locator(".notetypes .row", { hasText: /^Basic \[/ }).click();
+        await page.getByRole("button", { name: "Options", exact: true }).click();
+        const dialog = page.getByRole("dialog", { name: /Options for Basic/ });
+        const header = dialog.getByLabel("LaTeX header");
+        await expect(header).toBeVisible();
+        const marker = `% run ${Date.now() % 100000}`;
+        await header.fill(`\\documentclass[12pt]{article}\n${marker}`);
+        await dialog.getByLabel("LaTeX footer").fill("\\end{document}");
+        await dialog.getByLabel(/scalable images/).check();
+        await dialog.getByRole("button", { name: "Save" }).click();
+        await expect(dialog).toHaveCount(0);
+
+        await page.getByRole("button", { name: "Options", exact: true }).click();
+        const again = page.getByRole("dialog", { name: /Options for Basic/ });
+        await expect(again.getByLabel("LaTeX header")).toHaveValue(new RegExp(marker));
+        await expect(again.getByLabel("LaTeX footer")).toHaveValue("\\end{document}");
+        await expect(again.getByLabel(/scalable images/)).toBeChecked();
+        await again.getByRole("button", { name: "Cancel" }).click();
+        await expect(again).toHaveCount(0);
+    });
+
     test("renames a card type and the card type list shows the new name", async ({ page }) => {
         await openNoteTypes(page);
         await page.locator(".notetypes .row", { hasText: /^Basic \[/ }).click();
