@@ -20,6 +20,8 @@ desktop/                     Rust crate `anki-desktop` (Tauri app + HTTP mode)
   src/demo.rs                demo notes for dev/e2e collections
   src/menu.rs                native menu bar; choices run window.__ankiMenu(id) in the shell
   src/backup.rs              .colpkg backups into <profile>/backups (on quit, and Tools > Create Backup)
+  src/recording.rs           stores editor recordings (/_desktop/saveRecording/{name}) for addMediaFromPath
+  Info.plist                 microphone usage description; merged into the bundle and embedded in the dev binary
   web/card.html              the document cards render in (loads js/reviewer.js)
   tests/backend.rs           integration tests against a temporary collection
   tests/simulation.rs        seeded random operation sequences with invariants (ANKI_SIM_SEED/STEPS)
@@ -86,7 +88,8 @@ lists the methods that change the collection.
 `saveFilePicker` (JSON in, `{path}` out; `ANKI_TEST_FILE_PICK` /
 `ANKI_TEST_FILE_SAVE` answer them in tests), `closeCollection` /
 `reopenCollection` (around a full sync or a .colpkg import), `createBackup`,
-`quit`, `profiles` / `switchProfile` (see Profiles), and `seedDemo` (only
+`quit`, `profiles` / `switchProfile` (see Profiles), `saveRecording/{name}`
+(raw audio bytes in, `{path}` out; see Recording), and `seedDemo` (only
 under `--serve`, for tests). Typed helpers are
 in `desktop-api.ts`. Add commands there when a feature needs the OS; keep
 them small and testable.
@@ -117,6 +120,16 @@ keeps `desktop-settings.json` in the profile folder (`settings.rs`), exposed
 to web code through `getProfileConfigJson`/`setProfileConfigJson`/
 `getMetaJson`/`setMetaJson` and to the shell through `settingsGet/Set`.
 Sync credentials, remembered dialog state and similar go there.
+
+**Recording.** The editor's Record Audio button calls the `recordAudio`
+frontend method. The shell opens `RecorderDialog.svelte`, which records with
+`getUserMedia` + `MediaRecorder` (AAC/MP4 in WebKit), posts the bytes to
+`saveRecording/rec<seconds>.<ext>`, and resolves with the temporary file's
+path; the editor then adds it with `addMediaFromPath` exactly as it did with
+the Qt recorder's file. macOS only grants the microphone to a process with
+`NSMicrophoneUsageDescription`: `Info.plist` supplies it, and `build.rs`
+embeds it into the bare binary's `__info_plist` section for `bin/anki start`
+and the tests. The e2e spec stubs `getUserMedia` with a synthetic tone.
 
 **Profiles.** Each folder under the data folder (`profile.rs`: `ANKI_BASE`,
 else `~/Library/Application Support/Anki2`) is a profile with its own

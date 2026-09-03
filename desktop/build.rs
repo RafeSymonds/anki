@@ -14,7 +14,25 @@ use prost_reflect::DescriptorPool;
 
 fn main() -> Result<()> {
     tauri_build::build();
+    embed_info_plist();
     write_method_table()
+}
+
+/// The bundled app gets its Info.plist from tauri-bundler (which merges
+/// desktop/Info.plist in). The bare binary that `bin/anki start` and the
+/// tests run has no bundle, and macOS refuses microphone access to a process
+/// without a usage description, so embed the same plist into the binary's
+/// `__info_plist` section, which the system reads for unbundled executables.
+fn embed_info_plist() {
+    if env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("macos") {
+        return;
+    }
+    let plist = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join("Info.plist");
+    println!("cargo:rerun-if-changed={}", plist.display());
+    println!(
+        "cargo:rustc-link-arg-bins=-Wl,-sectcreate,__TEXT,__info_plist,{}",
+        plist.display()
+    );
 }
 
 /// Generates `methods.rs`: the table mapping the camelCase names the web code

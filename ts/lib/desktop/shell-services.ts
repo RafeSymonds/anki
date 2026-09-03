@@ -39,6 +39,8 @@ export interface ShellHooks {
     openFieldsDialog?(frame: Window): void;
     /** The editor in `frame` asked for the card templates of its note. */
     openCardsDialog?(frame: Window): void;
+    /** Record from the microphone; resolves to the file's path, or "" if cancelled. */
+    recordAudio?(): Promise<string>;
 }
 
 const encoder = new TextEncoder();
@@ -224,9 +226,12 @@ export function installShellServices(hooks: ShellHooks): () => void {
         ),
         registerFrontendHandler(
             "recordAudio",
-            typedHandler(Empty, () => {
-                hooks.notify("Recording is not available yet");
-                return new PbString({ val: "" });
+            typedHandler(Empty, async () => {
+                if (!hooks.recordAudio) {
+                    hooks.notify("Recording is not available here");
+                    return new PbString({ val: "" });
+                }
+                return new PbString({ val: await hooks.recordAudio() });
             }),
         ),
     ];

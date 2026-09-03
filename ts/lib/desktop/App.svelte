@@ -43,6 +43,7 @@ active.
     import Reviewer from "./Reviewer.svelte";
     import { ReviewerController } from "./reviewer";
     import { installRpcDoneHook, isOperation, onRpcDone } from "./rpc-events";
+    import RecorderDialog from "./RecorderDialog.svelte";
     import { installShellServices } from "./shell-services";
     import { isTypingTarget, ShortcutMap } from "./shortcuts";
     import ToolHost, { type PageRequest } from "./tools/ToolHost.svelte";
@@ -62,6 +63,8 @@ active.
 
     let tree: DeckTreeNode | null = null;
     let rows: DeckRow[] = [];
+    /** Set while the editor waits on a recording; the dialog resolves it. */
+    let recorderResolve: ((path: string) => void) | null = null;
     // New cards go to the selected deck, unless it is a filtered deck: those
     // cannot take new cards, so the editor falls back to its own defaults.
     $: addDeckId = rows.find((r) => r.id === currentDeckId)?.filtered
@@ -447,6 +450,10 @@ active.
             showMessage: async (text) => alert(text),
             openFieldsDialog: openFieldsFor,
             openCardsDialog: openCardsFor,
+            recordAudio: () =>
+                new Promise<string>((resolve) => {
+                    recorderResolve = resolve;
+                }),
             searchInBrowser: (node) => {
                 void buildSearchString(node).then((search) => openBrowser(search.val));
             },
@@ -635,6 +642,13 @@ active.
                 />
             {/if}
         </div>
+
+        {#if recorderResolve}
+            <RecorderDialog
+                resolve={recorderResolve}
+                on:close={() => (recorderResolve = null)}
+            />
+        {/if}
 
         <ToolHost
             on:noteTypes={openNotetypes}

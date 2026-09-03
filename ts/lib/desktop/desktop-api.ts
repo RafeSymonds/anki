@@ -120,3 +120,16 @@ export async function listProfiles(): Promise<ProfileList> {
 export async function switchProfile(name: string): Promise<void> {
     await post("switchProfile", name);
 }
+
+/** Store a recording in a temporary folder; returns its path for addMediaFromPath. */
+export async function saveRecording(name: string, blob: Blob): Promise<string> {
+    const response = await fetch(`/_desktop/saveRecording/${encodeURIComponent(name)}`, {
+        method: "POST",
+        body: blob,
+    });
+    if (!response.ok) {
+        throw new Error(await response.text());
+    }
+    const { path } = (await response.json()) as { path: string };
+    return path;
+}

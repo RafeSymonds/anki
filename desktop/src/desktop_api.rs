@@ -73,6 +73,13 @@ struct ImportCollection {
 }
 
 pub fn handle(state: &AppState, cmd: &str, body: &[u8]) -> Reply {
+    // The recorder posts raw audio bytes; the file name rides in the path.
+    if let Some(name) = cmd.strip_prefix("saveRecording/") {
+        return result(
+            crate::recording::save(name, body)
+                .map(|path| serde_json::json!({ "path": path.to_string_lossy() })),
+        );
+    }
     match cmd {
         "openLink" => {
             let url = String::from_utf8_lossy(body);

@@ -16,6 +16,7 @@ pub mod desktop_api;
 pub mod http;
 pub mod menu;
 pub mod profile;
+pub mod recording;
 pub mod rpc;
 pub mod scheme;
 pub mod settings;

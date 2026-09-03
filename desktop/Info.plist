@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Merged into the bundle's Info.plist by tauri-bundler, and embedded
+         into the bare development binary by build.rs, so WKWebView may ask
+         for the microphone (the editor's Record Audio button). -->
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Anki records audio for your flashcards when you press Record Audio in the editor.</string>
+</dict>
+</plist>
