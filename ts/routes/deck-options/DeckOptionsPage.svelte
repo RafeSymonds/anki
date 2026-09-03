@@ -63,6 +63,29 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     let dailyLimitsComponent: DailyLimits | undefined;
     let fsrsOptionsOuterComponent: FsrsOptionsOuter | undefined;
 
+    // Essentials shows the handful of settings most people change (daily
+    // limits and retention); Advanced shows everything. The choice sticks.
+    type View = "essentials" | "advanced";
+    const viewKey = "deckOptionsView";
+    let view: View = "essentials";
+    try {
+        const stored = localStorage.getItem(viewKey);
+        if (stored === "advanced" || stored === "essentials") {
+            view = stored;
+        }
+    } catch {
+        // storage unavailable
+    }
+    function setView(next: View): void {
+        view = next;
+        try {
+            localStorage.setItem(viewKey, next);
+        } catch {
+            // storage unavailable
+        }
+    }
+    $: advanced = view === "advanced";
+
     function onPresetChange() {
         if (dailyLimitsComponent) {
             dailyLimitsComponent.onPresetChange();
@@ -75,7 +98,16 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
 <ConfigSelector {state} on:presetchange={onPresetChange} />
 
-<div class="deck-options-page">
+<div class="view-toggle" role="tablist">
+    <button role="tab" class:active={!advanced} aria-selected={!advanced} on:click={() => setView("essentials")}>
+        Essentials
+    </button>
+    <button role="tab" class:active={advanced} aria-selected={advanced} on:click={() => setView("advanced")}>
+        Advanced
+    </button>
+</div>
+
+<div class="deck-options-page" class:essentials={!advanced}>
     <Container
         breakpoint="sm"
         --gutter-inline="0.25rem"
@@ -91,6 +123,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 />
             </Row>
 
+            {#if advanced}
             <Row class="row-columns">
                 <NewOptions {state} api={newOptions} />
             </Row>
@@ -102,6 +135,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             <Row class="row-columns">
                 <DisplayOrder {state} api={displayOrder} />
             </Row>
+            {/if}
 
             <Row class="row-columns">
                 <FsrsOptionsOuter
@@ -113,6 +147,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         </div>
 
         <div>
+            {#if advanced}
             <Row class="row-columns">
                 <BuryOptions {state} api={buryOptions} />
             </Row>
@@ -142,12 +177,34 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             <Row class="row-columns">
                 <AdvancedOptions {state} api={advancedOptions} />
             </Row>
+            {/if}
         </div>
     </Container>
 </div>
 
 <style lang="scss">
     @use "$lib/sass/breakpoints" as bp;
+
+    .view-toggle {
+        display: flex;
+        justify-content: center;
+        gap: 4px;
+        margin: 0.5rem auto 0.25rem;
+        button {
+            font: inherit;
+            color: var(--fg-subtle);
+            background: transparent;
+            border: 1px solid transparent;
+            border-radius: var(--border-radius);
+            padding: 4px 14px;
+            cursor: pointer;
+            &.active {
+                color: var(--fg);
+                background: var(--canvas-elevated);
+                border-color: var(--border);
+            }
+        }
+    }
 
     .deck-options-page {
         overflow-x: hidden;
