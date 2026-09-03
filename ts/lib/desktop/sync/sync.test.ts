@@ -71,6 +71,9 @@ function fakeRpc(overrides: Partial<SyncRpc> = {}): FakeRpc {
         async fullUploadOrDownload(auth, upload, serverUsn) {
             calls.push(`full ${upload ? "upload" : "download"} ${serverUsn ?? "-"}`);
         },
+        async syncMedia(auth) {
+            calls.push(`syncMedia ${auth.hkey}`);
+        },
         async mediaSyncStatus() {
             calls.push("mediaSyncStatus");
             return { active: false };
@@ -172,6 +175,7 @@ describe("settings", () => {
             syncMedia: true,
             autoSync: true,
             hostNum: 0,
+            autoSyncMediaMinutes: 15,
         });
         expect(syncAuth(settings)).toBeNull();
         expect(canAutoSync(settings)).toBe(false);
@@ -561,5 +565,59 @@ describe("SyncController", () => {
         fail = true;
         await h.controller.refreshStatus();
         expect(get(h.controller.status)).toBe(SyncStatusResponse_Required.NORMAL_SYNC);
+    });
+});
+
+describe("periodic media sync", () => {
+    async function loggedIn(extra: Record<string, unknown> = {}): Promise<FakeStore> {
+        const store = new FakeStore();
+        await store.set("syncKey", "hkey-x");
+        for (const [key, value] of Object.entries(extra)) {
+            await store.set(key, value);
+        }
+        return store;
+    }
+
+    it("runs a media-only sync once the interval has passed, quietly", async () => {
+        const { controller, rpc, seen, notices } = harness({ store: await loggedIn() });
+        const start = Date.now();
+        expect(await controller.periodicMediaSync(start)).toBe(true);
+        expect(rpc.calls).toEqual(["syncMedia hkey-x", "mediaSyncStatus"]);
+        // Background: no sheet, no notice.
+        expect(seen.filter((s) => s.phase !== "idle")).toEqual([]);
+        expect(notices).toEqual([]);
+
+        // Too soon for another (default 15 minutes)...
+        expect(await controller.periodicMediaSync(start + 60_000)).toBe(false);
+        expect(rpc.calls).toHaveLength(2);
+        // ...until the interval has passed since the last one finished.
+        expect(await controller.periodicMediaSync(Date.now() + 16 * 60_000)).toBe(true);
+        expect(rpc.calls).toHaveLength(4);
+    });
+
+    it("does nothing when logged out, media sync is off, or the interval is 0", async () => {
+        const loggedOut = harness();
+        expect(await loggedOut.controller.periodicMediaSync()).toBe(false);
+        expect(loggedOut.rpc.calls).toEqual([]);
+
+        const mediaOff = harness({ store: await loggedIn({ syncMedia: false }) });
+        expect(await mediaOff.controller.periodicMediaSync()).toBe(false);
+        expect(mediaOff.rpc.calls).toEqual([]);
+
+        const disabled = harness({ store: await loggedIn({ autoSyncMediaMinutes: 0 }) });
+        expect(await disabled.controller.periodicMediaSync()).toBe(false);
+        expect(disabled.rpc.calls).toEqual([]);
+    });
+
+    it("reports a failure to start as a notice and does not block later runs", async () => {
+        const rpc = fakeRpc({
+            async syncMedia() {
+                throw new Error("offline");
+            },
+        });
+        const { controller, notices } = harness({ rpc, store: await loggedIn() });
+        expect(await controller.periodicMediaSync()).toBe(true);
+        expect(notices).toEqual(["offline"]);
+        expect(await controller.periodicMediaSync(Date.now() + 16 * 60_000)).toBe(true);
     });
 });

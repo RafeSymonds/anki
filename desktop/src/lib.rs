@@ -271,6 +271,10 @@ fn run_window(options: Options) {
             state.set_app_handle(app.handle().clone());
             app.manage(state);
 
+            // Unattended backups, as main.py's periodic backup timer.
+            let handle = app.handle().clone();
+            std::thread::spawn(move || backup::periodic_loop(&handle));
+
             // ANKI_NO_MENU=1 skips the menu bar, a debugging aid.
             if std::env::var_os("ANKI_NO_MENU").is_none() {
                 match menu::build(app.handle()) {

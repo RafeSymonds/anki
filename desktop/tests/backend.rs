@@ -279,3 +279,32 @@ fn seeded_profiles_skip_the_first_card_guide() {
         serde_json::Value::Null
     );
 }
+
+#[test]
+fn periodic_backups_wait_for_a_profile_and_for_time_to_pass() {
+    use anki_desktop::backup;
+
+    let base = tempfile::tempdir().unwrap();
+    let backend = new_backend();
+    let state = AppState::new(
+        backend,
+        WebRoot::from_repo(),
+        Settings::load(std::path::Path::new("/nonexistent")),
+        base.path().to_path_buf(),
+    );
+    // Nothing open yet: a tick is a no-op, not an error.
+    assert!(!backup::periodic_tick(&state).unwrap());
+
+    let profile = base.path().join("User 1");
+    profile::open_collection(&state.backend, &profile).unwrap();
+    state.set_profile_dir(Some(profile.clone()));
+    assert!(backup::create_backup(&state, true).unwrap());
+    // Just backed up and nothing changed since: rslib skips the unforced one.
+    assert!(!backup::periodic_tick(&state).unwrap());
+    assert_eq!(
+        std::fs::read_dir(backup::backup_folder(&profile))
+            .unwrap()
+            .count(),
+        1
+    );
+}

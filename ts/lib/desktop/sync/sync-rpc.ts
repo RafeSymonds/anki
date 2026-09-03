@@ -76,6 +76,8 @@ export interface SyncRpc {
     syncLogin(username: string, password: string, endpoint?: string): Promise<string>;
     syncStatus(auth: SyncAuthInput): Promise<SyncStatus>;
     syncCollection(auth: SyncAuthInput, syncMedia: boolean): Promise<SyncOutput>;
+    /** Start a media-only sync in the background (follow it with mediaSyncStatus). */
+    syncMedia(auth: SyncAuthInput): Promise<void>;
     fullUploadOrDownload(auth: SyncAuthInput, upload: boolean, serverUsn?: number): Promise<void>;
     mediaSyncStatus(): Promise<MediaStatus>;
     latestProgress(): Promise<SyncProgress>;
@@ -148,6 +150,9 @@ export const backendSyncRpc: SyncRpc = {
             newEndpoint: out.newEndpoint,
             serverMediaUsn: out.serverMediaUsn,
         };
+    },
+    async syncMedia(auth) {
+        await postBackend("syncMedia", authMessage(auth), Empty);
     },
     async fullUploadOrDownload(auth, upload, serverUsn) {
         await postBackend(

@@ -50,7 +50,11 @@ active.
     import ToolHost, { type PageRequest } from "./tools/ToolHost.svelte";
     import { TOOL_SHORTCUTS } from "./tools/tools";
     import ToolsMenu from "./tools/ToolsMenu.svelte";
-    import { SYNC_TITLE, SyncController } from "./sync/sync";
+    import {
+        PERIODIC_MEDIA_SYNC_CHECK_MS,
+        SYNC_TITLE,
+        SyncController,
+    } from "./sync/sync";
     import { backendSyncRpc } from "./sync/sync-rpc";
     import SyncPanel from "./sync/SyncPanel.svelte";
 
@@ -288,6 +292,7 @@ active.
     }
 
     let uninstallMenu: (() => void) | undefined;
+    let mediaSyncTimer: ReturnType<typeof setInterval> | undefined;
 
     // The host asks the shell to finish before the window closes (Cmd+Q, the
     // close button, Quit in the menu): sync on quit if enabled, then quit.
@@ -487,14 +492,21 @@ active.
         });
         currentDeckId = await fetchCurrentDeckId();
         await refreshDecks();
-        // maybe_auto_sync_on_open_close in main.py; the shell has no quit
-        // hook yet, so only the open side exists.
+        // maybe_auto_sync_on_open_close in main.py (the close side is in
+        // beforeQuit), then the periodic media sync check.
         if (!(await sync.autoSync())) {
             void sync.refreshStatus();
         }
+        mediaSyncTimer = setInterval(
+            () => void sync.periodicMediaSync(),
+            PERIODIC_MEDIA_SYNC_CHECK_MS,
+        );
     });
 
     onDestroy(() => {
+        if (mediaSyncTimer) {
+            clearInterval(mediaSyncTimer);
+        }
         uninstallMenu?.();
         darkQuery.removeEventListener("change", applyTheme);
         window.removeEventListener("keydown", onKeydown);

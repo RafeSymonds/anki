@@ -131,6 +131,13 @@ the Qt recorder's file. macOS only grants the microphone to a process with
 embeds it into the bare binary's `__info_plist` section for `bin/anki start`
 and the tests. The e2e spec stubs `getUserMedia` with a synthetic tone.
 
+**Periodic work.** As main.py's timers: every five minutes the Rust side
+asks rslib for an unforced backup (`backup::periodic_loop`; rslib skips it
+until the configured interval has passed and the collection changed), and
+the shell checks whether a media-only sync is due
+(`SyncController.periodicMediaSync`, `autoSyncMediaMinutes`, default 15,
+0 turns it off). Both stay out of the way: no sheet, no notice.
+
 **First-run guide.** The first time a profile reviews a card, the reviewer
 shows a one-time guide over the answer buttons (`FirstCardOverlay.svelte`,
 `first-card.ts`); the per-profile setting `firstCardGuideShown` records the

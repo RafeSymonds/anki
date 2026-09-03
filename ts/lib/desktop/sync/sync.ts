@@ -39,6 +39,8 @@ export interface SyncSettings {
     /** A self-hosted server chosen by the user. */
     customSyncUrl: string | null;
     syncMedia: boolean;
+    /** profile.get("autoSyncMediaMinutes", 15); 0 turns periodic media sync off. */
+    autoSyncMediaMinutes: number;
     autoSync: boolean;
     hostNum: number;
 }
@@ -53,11 +55,19 @@ function stringOrNull(value: unknown): string | null {
 }
 
 export async function loadSyncSettings(store: SettingsStore): Promise<SyncSettings> {
-    const [syncKey, syncUser, currentSyncUrl, customSyncUrl, syncMedia, autoSync, hostNum] = await Promise.all(
-        ["syncKey", "syncUser", "currentSyncUrl", "customSyncUrl", "syncMedia", "autoSync", "hostNum"].map((key) =>
-            store.get(key)
-        ),
-    );
+    const [syncKey, syncUser, currentSyncUrl, customSyncUrl, syncMedia, autoSync, hostNum, autoSyncMediaMinutes] =
+        await Promise.all(
+            [
+                "syncKey",
+                "syncUser",
+                "currentSyncUrl",
+                "customSyncUrl",
+                "syncMedia",
+                "autoSync",
+                "hostNum",
+                "autoSyncMediaMinutes",
+            ].map((key) => store.get(key)),
+        );
     return {
         syncKey: stringOrNull(syncKey),
         syncUser: stringOrNull(syncUser),
@@ -65,6 +75,7 @@ export async function loadSyncSettings(store: SettingsStore): Promise<SyncSettin
         customSyncUrl: stringOrNull(customSyncUrl),
         // profile.get("syncMedia", True) / profile.get("autoSync", True)
         syncMedia: typeof syncMedia === "boolean" ? syncMedia : true,
+        autoSyncMediaMinutes: typeof autoSyncMediaMinutes === "number" ? autoSyncMediaMinutes : 15,
         autoSync: typeof autoSync === "boolean" ? autoSync : true,
         hostNum: typeof hostNum === "number" ? hostNum : 0,
     };
@@ -221,6 +232,9 @@ function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** How often the shell asks whether a periodic media sync is due (main.py: 5 min). */
+export const PERIODIC_MEDIA_SYNC_CHECK_MS = 5 * 60_000;
+
 export class SyncController {
     /** What SyncPanel shows. */
     readonly state = writable<SyncPhase>({ phase: "idle" });
@@ -231,6 +245,8 @@ export class SyncController {
 
     private pending: ((answer: unknown) => void) | null = null;
     private busy = false;
+    /** When the last media sync finished (MediaSyncer.seconds_since_last_sync). */
+    private lastMediaSyncAt = 0;
     private readonly timing: SyncTiming;
 
     constructor(
@@ -283,6 +299,33 @@ export class SyncController {
             return false;
         }
         await this.sync();
+        return true;
+    }
+
+    /** main.py on_periodic_sync_timer: a media-only sync in the background
+     * once `autoSyncMediaMinutes` have passed since the last one. Returns
+     * whether one ran. */
+    async periodicMediaSync(now = Date.now()): Promise<boolean> {
+        if (this.busy) {
+            return false;
+        }
+        const settings = await loadSyncSettings(this.store);
+        const auth = syncAuth(settings);
+        if (!auth || !settings.syncMedia || settings.autoSyncMediaMinutes <= 0) {
+            return false;
+        }
+        if (now - this.lastMediaSyncAt < settings.autoSyncMediaMinutes * 60_000) {
+            return false;
+        }
+        this.busy = true;
+        try {
+            await this.rpc.syncMedia(auth);
+            await this.monitorMedia(true);
+        } catch (err) {
+            this.hooks.notify(classifySyncError(err).message);
+        } finally {
+            this.busy = false;
+        }
         return true;
     }
 
@@ -544,8 +587,10 @@ export class SyncController {
     }
 
     /** MediaSyncer.start_monitoring / _on_finished / _handle_sync_error. */
-    private async monitorMedia(): Promise<void> {
-        this.state.set({ phase: "media", text: tr.syncMediaStarting(), active: true });
+    private async monitorMedia(quiet = false): Promise<void> {
+        if (!quiet) {
+            this.state.set({ phase: "media", text: tr.syncMediaStarting(), active: true });
+        }
         let text: string;
         try {
             for (;;) {
@@ -568,6 +613,10 @@ export class SyncController {
                 text = tr.syncMediaFailed();
                 await this.showMessage(message);
             }
+        }
+        this.lastMediaSyncAt = Date.now();
+        if (quiet) {
+            return;
         }
         const final: SyncPhase = { phase: "media", text, active: false };
         this.state.set(final);

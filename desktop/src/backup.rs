@@ -40,6 +40,35 @@ pub fn create_backup(state: &AppState, force: bool) -> Result<bool> {
     Ok(created.val)
 }
 
+/// main.py checks every five minutes whether a backup is due.
+pub const PERIODIC_INTERVAL: std::time::Duration = std::time::Duration::from_secs(5 * 60);
+
+/// One timer tick: an unforced backup when a profile is open. rslib decides
+/// whether enough time has passed and the collection changed.
+pub fn periodic_tick(state: &AppState) -> Result<bool> {
+    if state.profile_dir().is_none() {
+        return Ok(false);
+    }
+    create_backup(state, false)
+}
+
+/// Runs `periodic_tick` every `PERIODIC_INTERVAL` until the app quits.
+pub fn periodic_loop(handle: &tauri::AppHandle) {
+    use tauri::Manager;
+    loop {
+        std::thread::sleep(PERIODIC_INTERVAL);
+        let state = handle.state::<AppState>();
+        if state.is_quitting() {
+            return;
+        }
+        match periodic_tick(&state) {
+            Ok(true) => eprintln!("periodic backup created"),
+            Ok(false) => {}
+            Err(err) => eprintln!("periodic backup: {err:#}"),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
