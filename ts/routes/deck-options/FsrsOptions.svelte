@@ -22,6 +22,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     import GlobalLabel from "./GlobalLabel.svelte";
     import { commitEditing, fsrsParams, type DeckOptionsState, ValueTab } from "./lib";
+    import { retentionConsequence } from "./consequences";
+    import { essentialsContext } from "./consequences-context";
     import SpinBoxFloatRow from "./SpinBoxFloatRow.svelte";
     import Warning from "./Warning.svelte";
     import ParamsInputRow from "./ParamsInputRow.svelte";
@@ -55,6 +57,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
     const config = state.currentConfig;
     const defaults = state.defaults;
+    const essentials = essentialsContext();
     const fsrsReschedule = state.fsrsReschedule;
     const daysSinceLastOptimization = state.daysSinceLastOptimization;
     const limits = state.deckLimits;
@@ -385,6 +388,9 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
                 {tr.deckConfigDesiredRetention()}
             </SettingTitle>
         </SpinBoxFloatRow>
+        {#if $essentials}
+            <p class="consequence">{retentionConsequence(effectiveDesiredRetention)}</p>
+        {/if}
     </Item>
 </DynamicallySlottable>
 
@@ -500,6 +506,11 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 />
 
 <style>
+    .consequence {
+        margin: 0.15rem 0 0.5rem;
+        font-size: 0.85em;
+    }
+
     .btn {
         margin-bottom: 0.375rem;
     }

@@ -12,7 +12,12 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     import type { DynamicSvelteComponent } from "$lib/sveltelib/dynamicComponent";
 
     import Addons from "./Addons.svelte";
+    import { setContext } from "svelte";
+
+    import { writable } from "svelte/store";
+
     import AdvancedOptions from "./AdvancedOptions.svelte";
+    import { ESSENTIALS_CONTEXT } from "./consequences-context";
     import AudioOptions from "./AudioOptions.svelte";
     import AutoAdvance from "./AutoAdvance.svelte";
     import BuryOptions from "./BuryOptions.svelte";
@@ -85,6 +90,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         }
     }
     $: advanced = view === "advanced";
+    // Sections show one-line consequences and inline help in the Essentials view.
+    const essentials = writable(true);
+    setContext(ESSENTIALS_CONTEXT, essentials);
+    $: essentials.set(!advanced);
 
     function onPresetChange() {
         if (dailyLimitsComponent) {

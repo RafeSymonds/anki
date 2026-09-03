@@ -19,6 +19,12 @@
     import GlobalLabel from "./GlobalLabel.svelte";
     import type { DeckOptionsState } from "./lib";
     import { ValueTab } from "./lib";
+    import {
+        firstSentence,
+        newCardsConsequence,
+        reviewLimitConsequence,
+    } from "./consequences";
+    import { essentialsContext } from "./consequences-context";
     import SpinBoxRow from "./SpinBoxRow.svelte";
     import TabbedValue from "./TabbedValue.svelte";
     import Warning from "./Warning.svelte";
@@ -145,6 +151,7 @@
         },
     };
     const helpSections: HelpItem[] = Object.values(settings);
+    const essentials = essentialsContext();
 
     let modal: Modal;
     let carousel: Carousel;
@@ -177,6 +184,10 @@
                     {settings.newLimit.title}
                 </SettingTitle>
             </SpinBoxRow>
+            {#if $essentials}
+                <p class="consequence">{newCardsConsequence(newValue)}</p>
+                <p class="inline-help">{firstSentence(settings.newLimit.help)}</p>
+            {/if}
         </Item>
 
         <Item>
@@ -189,6 +200,12 @@
                     {settings.reviewLimit.title}
                 </SettingTitle>
             </SpinBoxRow>
+            {#if $essentials}
+                <p class="consequence">
+                    {reviewLimitConsequence(reviewsValue, newValue)}
+                </p>
+                <p class="inline-help">{firstSentence(settings.reviewLimit.help)}</p>
+            {/if}
         </Item>
 
         <Item>
@@ -222,3 +239,15 @@
         </Item>
     </DynamicallySlottable>
 </TitledContainer>
+
+<style>
+    .consequence,
+    .inline-help {
+        margin: 0.15rem 0 0.5rem;
+        font-size: 0.85em;
+        color: var(--fg-subtle);
+    }
+    .consequence {
+        color: var(--fg);
+    }
+</style>
