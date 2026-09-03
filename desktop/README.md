@@ -1,0 +1,145 @@
+# Anki desktop shell (Tauri)
+
+A macOS app that replaces the PyQt GUI (`qt/`, `pylib/`) with a Tauri 2 window
+over the existing Rust core (`rslib/`) and the existing Svelte pages (`ts/`).
+The collection file format and the sync protocol are untouched: everything
+here is GUI. This document is the map for anyone working on it.
+
+## Layout
+
+```
+desktop/                     Rust crate `anki-desktop` (Tauri app + HTTP mode)
+  src/lib.rs                 startup: open collection, build AppState, window or --serve
+  src/scheme.rs              the anki:// scheme: routes every request (also used by HTTP mode)
+  src/rpc.rs                 /_anki/{method} -> Backend::run_service_method (table from build.rs)
+  src/desktop_api.rs         /_desktop/{command}: native actions (links, files, dialogs, settings)
+  src/settings.rs            per-profile JSON settings (replaces the Qt profile/meta pickles)
+  src/profile.rs             data folder, profile folders, open/close collection
+  src/http.rs                loopback HTTP server for `anki-desktop --serve PORT`
+  src/demo.rs                demo notes for dev/e2e collections
+  web/card.html              the document cards render in (loads js/reviewer.js)
+  tests/backend.rs           integration tests against a temporary collection
+  examples/seed.rs           `cargo run -p anki-desktop --example seed -- <profile dir>`
+ts/lib/desktop/              the Svelte app shell (mounted by ts/routes/+page.svelte)
+  App.svelte                 shell: sidebar + screens (overview, review, add, embedded page)
+  DeckSidebar.svelte         deck tree
+  Overview.svelte            deck overview / congrats
+  Reviewer.svelte            study screen chrome; reviewer.ts is the logic (port of reviewer.py)
+  CardFrame.svelte           iframe around desktop/web/card.html
+  EditorPanel.svelte         iframe around the note editor route (/editor/?mode=add|current)
+  EmbeddedPage.svelte        iframe around any other SvelteKit route (deck options, graphs, ...)
+  frontend-service.ts        FrontendService (proto/anki/frontend.proto) implemented in the shell
+  shell-services.ts          the shell-wide FrontendService handlers
+  bridge.ts                  bridgeCommand/pycmd plumbing
+  rpc-events.ts              "a backend call ran" notifications (stand-in for operation_did_execute)
+  desktop-api.ts             calls to /_desktop/* (native side)
+  decks.ts, card-html.ts, audio.ts, shortcuts.ts   pure logic with vitest tests next to them
+ts/tests/desktop/            Playwright e2e specs (run against `anki-desktop --serve`)
+playwright.desktop.config.ts
+bin/anki                     start/stop/restart/status/serve/e2e/build/logs
+```
+
+## How the pieces talk
+
+**Backend RPC.** Web code calls rslib exactly as it always has: `postProto` in
+`ts/lib/generated/post.ts` POSTs protobuf bytes to `/_anki/{camelCaseMethod}`.
+`scheme.rs` maps that onto `Backend::run_service_method(service, method, bytes)`
+using a table generated at build time from the protobuf descriptors
+(`desktop/build.rs`). Errors come back as 500 with the backend error message,
+which `postProto` alerts and rethrows. Nothing in Python is involved.
+
+**FrontendService.** Methods in `proto/anki/frontend.proto` (askUser,
+openFilePicker, closeAddCards, deckOptionsRequireClose, getSchedulingStatesWithContext, ...)
+are calls the web code makes *to the GUI*. The host injects a shim
+(`scheme.rs::init_script`, served at `/_desktop/init.js` and inserted as the
+first script of every HTML document) that redirects those fetches to
+`window.top.__ankiFrontendService(method, bytes, frame)`, i.e.
+`dispatchFrontendCall` in `frontend-service.ts`. Register handlers with
+`registerFrontendHandler(name, typedHandler(RequestType, fn))`; the component
+that owns the behaviour registers them on mount and unregisters on destroy.
+Shell-wide ones live in `shell-services.ts`. A method with no handler makes the
+page's call fail with "frontend method not implemented in the app shell".
+
+**bridgeCommand / pycmd.** The shim defines these in every frame and queues
+calls until the shell calls `installBridgeHandler(frameWindow, handler)`
+(`bridge.ts`). The reviewer document sends `ans`, `ease1`..`ease4`,
+`play:q:0`, `statesMutated`; the editor sends `editorReady`, `saved`,
+`focus:N`, `blur:N`, `key:N`, ...; SvelteKit pages send `close`.
+
+**Operation notifications.** After any successful POST to `/_anki/{method}`
+the shim calls `window.top.__ankiRpcDone(method, frame)`. `rpc-events.ts`
+fans that out (`onRpcDone`) so views can refresh, e.g. the deck list after
+`answerCard`, the card after the editor's `updateNotes`. `isOperation()`
+lists the methods that change the collection.
+
+**Native side.** `/_desktop/{command}` POSTs go to `desktop_api.rs`:
+`openLink`, `openMedia`, `showInMediaFolder`, `settingsGet`/`settingsSet`
+(`{scope: "profile"|"meta", key, value}`), `openFilePicker` (JSON in, `{path}`
+out; set `ANKI_TEST_FILE_PICK` in tests). Typed helpers are in
+`desktop-api.ts`. Add commands there when a feature needs the OS; keep them
+small and testable.
+
+**Documents.** Everything is one origin (`anki://localhost` in the app,
+`http://127.0.0.1:PORT` in HTTP mode). Static files come from
+`out/qt/_aqt/data/web` (the tree the Qt app served; build it with `just web`).
+`/_app/*` and `/_anki/sveltekit/*` are the SvelteKit build; `/deck-options/1`,
+`/editor/?mode=add`, `/graphs`, `/congrats`, ... are SvelteKit routes
+(`scheme.rs::SVELTEKIT_ROUTES`); any other root path is a media file from the
+open collection's media folder. `/_desktop/card.html` is the card document.
+
+**Existing pages as iframes.** Deck options, statistics, import, card info,
+change notetype, image occlusion and preferences are the existing SvelteKit
+routes, embedded with `EmbeddedPage.svelte`, which also answers their close
+requests. The note editor is embedded with `EditorPanel.svelte`, which drives
+it the way `qt/aqt/editor.py` does (`loadNote({...})` after `editorReady`).
+Prefer embedding an existing route over rewriting it; write new Svelte for
+what only existed in Qt (deck list, reviewer chrome, browser, note types, ...).
+
+**Settings.** The Qt app kept profile/meta dictionaries in a pickle. The shell
+keeps `desktop-settings.json` in the profile folder (`settings.rs`), exposed
+to web code through `getProfileConfigJson`/`setProfileConfigJson`/
+`getMetaJson`/`setMetaJson` and to the shell through `settingsGet/Set`.
+Sync credentials, remembered dialog state and similar go there.
+
+## Commands
+
+```
+bin/anki start [--build]      build (web with --build) and launch the window
+bin/anki stop | status | restart | logs
+bin/anki serve [port] [--fresh]   HTTP mode; --fresh seeds out/anki-e2e-base
+bin/anki e2e                  Playwright e2e (= just test-e2e-desktop)
+just web                      build the web assets the app serves
+cargo test -p anki-desktop    Rust unit + integration tests
+yarn vitest run lib/desktop   shell unit tests (use out/extracted/node/bin/yarn)
+yarn svelte-check:once        type-check Svelte/TS
+out/node_modules/.bin/eslint -c .eslintrc.cjs ts/lib/desktop ts/tests/desktop
+just fix-fmt                  format Rust and TS before committing
+just lint                     the full lint suite (clippy, mypy, ruff, eslint, svelte, tsc)
+```
+
+`ANKI_BASE` chooses the data folder (bin/anki defaults it to
+`out/anki-dev-base` so a dev build never touches the real collection);
+`ANKI_START_ROUTE=/congrats` opens the window on one route.
+
+## Conventions
+
+- Every source file starts with the project's copyright header (minilints
+  checks it).
+- Ports of Python behaviour name the Python they mirror in a comment
+  (`_redraw_current_card` in reviewer.py, `av_refs_to_play_icons` in sound.py).
+- Pure logic goes in `.ts` modules with vitest tests next to them;
+  components stay thin. Rust gets unit tests in-module and integration tests
+  in `desktop/tests/`.
+- Translations: `import * as tr from "@generated/ftl"`; names are the
+  camelCase of the Fluent ids (`studying-show-answer` -> `tr.studyingShowAnswer()`).
+  Check a name exists with `grep "export function <name>" out/ts/lib/generated/ftl.ts`.
+- Proto types: `@generated/anki/<file>_pb` (protobuf-es). Field names are
+  camelCase; ids are `bigint`; request wrappers need every field
+  (`PlainMessage`).
+- CSS uses the theme variables from `ts/lib/sass` (`--canvas`, `--fg`,
+  `--border`, `--state-new`, ...); the shell follows the system light/dark
+  setting and passes `nightMode` to frames (`#night` on SvelteKit routes).
+- Never modify `rslib/src/sync`, `rslib/src/storage/upgrades` or the
+  collection schema. Adding backend RPCs or proto messages is fine.
+- Do not read the user's real collection in tests; `--fresh` and
+  `tempfile::tempdir()` collections only.
