@@ -20,7 +20,11 @@ use tauri::Runtime;
 pub const ITEMS: &[(&str, &str, Option<&str>)] = &[
     ("preferences", "Preferences…", Some("CmdOrCtrl+,")),
     ("sync", "Sync", None),
-    ("switch_profile", "Switch Profile…", Some("CmdOrCtrl+Shift+P")),
+    (
+        "switch_profile",
+        "Switch Profile…",
+        Some("CmdOrCtrl+Shift+P"),
+    ),
     ("import", "Import…", Some("CmdOrCtrl+Shift+I")),
     ("export", "Export…", Some("CmdOrCtrl+E")),
     ("undo", "Undo", None),
@@ -31,7 +35,11 @@ pub const ITEMS: &[(&str, &str, Option<&str>)] = &[
     ("stats", "Statistics", None),
     ("study_deck", "Study Deck…", Some("/")),
     ("create_filtered_deck", "Create Filtered Deck…", None),
-    ("note_types", "Manage Note Types…", Some("CmdOrCtrl+Shift+N")),
+    (
+        "note_types",
+        "Manage Note Types…",
+        Some("CmdOrCtrl+Shift+N"),
+    ),
     ("check_database", "Check Database", None),
     ("check_media", "Check Media…", None),
     ("empty_cards", "Empty Cards…", None),
@@ -151,7 +159,10 @@ pub fn on_event<R: Runtime>(app: &AppHandle<R>, event: MenuEvent) {
         return;
     }
     if let Some(window) = app.get_webview_window("main") {
-        let js = format!("window.__ankiMenu && window.__ankiMenu({})", serde_json::to_string(&id).expect("json"));
+        let js = format!(
+            "window.__ankiMenu && window.__ankiMenu({})",
+            serde_json::to_string(&id).expect("json")
+        );
         if let Err(err) = window.eval(&js) {
             eprintln!("menu {id}: {err}");
         }

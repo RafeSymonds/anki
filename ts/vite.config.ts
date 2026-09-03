@@ -54,7 +54,7 @@ const viteConfig = defineViteConfig({
 const vitestConfig = defineVitestConfig({
     test: {
         include: ["**/*.{test,spec}.{js,ts}"],
-        exclude: ["tests/e2e/**", "node_modules/**"],
+        exclude: ["tests/e2e/**", "tests/desktop/**", "node_modules/**"],
         coverage: {
             include: ["lib/**", "routes/**", "editable/**", "editor/**", "html-filter/**", "reviewer/**", "tools/**"],
         },
