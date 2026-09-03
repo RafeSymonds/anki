@@ -7,6 +7,35 @@ editing the card being reviewed, driven the way qt/aqt/editor.py drives it:
 wait for "editorReady", call loadNote(), and answer the close requests it
 makes through FrontendService.
 -->
+<script context="module" lang="ts">
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    type EditorWindow = Window & Record<string, any>;
+
+    /** What `getNoteInfo()` in NoteEditor.svelte reports about the loaded note. */
+    export interface EditorNoteInfo {
+        /** Null for a note that has not been added yet. */
+        id: bigint | null;
+        notetypeId: bigint;
+        fields: string[];
+    }
+
+    /** The note shown by the editor running in `frame`; null when it is not
+     * an editor or has not loaded a note. */
+    export function editorNoteInfo(frame: Window | null): EditorNoteInfo | null {
+        let raw: { id: string | null; mid: string; fields: string[] } | undefined;
+        try {
+            raw = (frame as EditorWindow | null)?.getNoteInfo?.();
+        } catch {
+            return null;
+        }
+        if (!raw?.mid) {
+            return null;
+        }
+        const id = raw.id ? BigInt(raw.id) : 0n;
+        return { id: id || null, notetypeId: BigInt(raw.mid), fields: raw.fields ?? [] };
+    }
+</script>
+
 <script lang="ts">
     import { Bool, Empty } from "@generated/anki/generic_pb";
     import { getNote } from "@generated/backend";
@@ -15,6 +44,7 @@ makes through FrontendService.
 
     import { installBridgeHandler, parseBridgeCommand } from "./bridge";
     import { registerFrontendHandler, typedHandler } from "./frontend-service";
+    import { onRpcDone } from "./rpc-events";
 
     export let mode: "add" | "current" = "add";
     export let noteId: bigint | null = null;
@@ -23,9 +53,6 @@ makes through FrontendService.
     export let nightMode = false;
 
     const dispatch = createEventDispatcher<{ close: void; changed: void }>();
-
-    /* eslint-disable @typescript-eslint/no-explicit-any */
-    type EditorWindow = Window & Record<string, any>;
 
     let frame: HTMLIFrameElement;
     let ready = false;
@@ -114,6 +141,17 @@ makes through FrontendService.
         }
     }
 
+    /** The note the editor is showing (`getNoteInfo` in NoteEditor.svelte). */
+    export function getNoteInfo(): EditorNoteInfo | null {
+        return ready ? editorNoteInfo(win()) : null;
+    }
+
+    /** Reload after the note type changed in another frame, as
+     * webview.py's on_operation_did_execute tells the page. */
+    function onNotetypeChanged(): void {
+        win()?.anki?.onOperationDidExecute?.({ notetype: true, noteText: true });
+    }
+
     /** Flush pending field edits; resolves once the editor reports "saved". */
     export function saveNow(): Promise<void> {
         return new Promise((resolve) => {
@@ -141,6 +179,12 @@ makes through FrontendService.
     }
 
     onMount(() => {
+        const offRpcDone = onRpcDone((method) => {
+            if (method === "updateNotetype" || method === "restoreNotetypeToStock") {
+                onNotetypeChanged();
+            }
+        });
+        unregister.push(() => offRpcDone());
         unregister.push(
             registerFrontendHandler(
                 "closeAddCards",
