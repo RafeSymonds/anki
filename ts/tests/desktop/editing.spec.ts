@@ -8,6 +8,10 @@ function editorFrame(page: Page): FrameLocator {
 }
 
 /** The contenteditable for a field inside the editor frame (see ts/tests/e2e/helpers.ts). */
+function fieldLabel(editor: FrameLocator, index: number): Locator {
+    return editor.locator(`.field-container[data-index="${index}"]`).locator(".label-name");
+}
+
 function editableField(editor: FrameLocator, index: number): Locator {
     return editor
         .locator(`.field-container[data-index="${index}"]`)
@@ -50,6 +54,77 @@ test.describe("adding and editing notes", () => {
 
         await page.getByRole("button", { name: /Close/ }).click();
         await expect(page.getByRole("button", { name: "Study Now" })).toBeVisible();
+    });
+
+    test("the kind picker switches between basic, both directions and fill in the blank", async ({ page }) => {
+        await page.goto("/");
+        await page.getByRole("button", { name: "Add" }).click();
+        const editor = editorFrame(page);
+        await expect(editor.locator(".field-container").first()).toBeVisible({ timeout: 20_000 });
+        const picker = page.getByRole("radiogroup", { name: "Kind of card" });
+        await expect(picker).toBeVisible();
+
+        await picker.getByRole("radio", { name: "Fill in the blank" }).click();
+        await expect(fieldLabel(editor, 0)).toHaveText("Text", { timeout: 10_000 });
+        await expect(picker.getByRole("radio", { name: "Fill in the blank" })).toHaveAttribute("aria-checked", "true");
+
+        // Adding a cloze note without a blank explains how to make one first.
+        const front = editableField(editor, 0);
+        await front.click();
+        await front.pressSequentially("Paris is the capital of France");
+        let question = "";
+        page.once("dialog", (dialog) => {
+            question = dialog.message();
+            void dialog.dismiss();
+        });
+        await editor.getByRole("button", { name: "Add", exact: true }).click();
+        await expect.poll(() => question).toContain("No blanks yet");
+        await expect(front).toContainText("Paris");
+
+        await picker.getByRole("radio", { name: "Both directions" }).click();
+        await expect(fieldLabel(editor, 0)).toHaveText("Front", { timeout: 10_000 });
+        await expect(editor.locator(".chooser-button").first()).toContainText("reversed");
+        await picker.getByRole("radio", { name: "Basic", exact: true }).click();
+        await expect(editor.locator(".chooser-button").first()).toHaveText(/^Basic$/);
+        await page.getByRole("button", { name: /Close/ }).click();
+    });
+
+    test("the live preview shows the card as it is typed and stays on across reopenings", async ({ page }) => {
+        await page.goto("/");
+        await page.getByRole("button", { name: "Add" }).click();
+        const editor = editorFrame(page);
+        await expect(editor.locator(".field-container").first()).toBeVisible({ timeout: 20_000 });
+        const toggle = page.getByRole("button", { name: "Preview", exact: true });
+        if ((await toggle.getAttribute("aria-pressed")) !== "true") {
+            await toggle.click();
+        }
+        const preview = page.locator(".add-preview");
+        await expect(preview).toBeVisible();
+        await expect(preview).toContainText("Type in a field");
+
+        await page.getByRole("radio", { name: "Basic", exact: true }).click();
+        await expect(fieldLabel(editor, 0)).toHaveText("Front", { timeout: 10_000 });
+        const front = editableField(editor, 0);
+        await front.click();
+        await front.pressSequentially("Preview me");
+        const question = preview.frameLocator("iframe[title=card]").first().locator("#qa");
+        await expect(question).toContainText("Preview me", { timeout: 15_000 });
+        await expect(preview).not.toContainText("Type in a field");
+
+        // The choice is remembered for the next time the panel opens.
+        // Closing with text typed asks whether to discard it.
+        page.once("dialog", (dialog) => void dialog.accept());
+        await page.getByRole("button", { name: /Close/ }).click();
+        await expect(page.getByRole("button", { name: "Study Now" })).toBeVisible();
+        await page.getByRole("button", { name: "Add" }).click();
+        await expect(editor.locator(".field-container").first()).toBeVisible({ timeout: 20_000 });
+        await expect(page.getByRole("button", { name: "Preview", exact: true })).toHaveAttribute(
+            "aria-pressed",
+            "true",
+        );
+        await page.getByRole("button", { name: "Preview", exact: true }).click();
+        await expect(page.locator(".add-preview")).toHaveCount(0);
+        await page.getByRole("button", { name: /Close/ }).click();
     });
 
     test("edits the current card during review and the card re-renders", async ({ page }) => {

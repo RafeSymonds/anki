@@ -43,12 +43,19 @@ makes through FrontendService.
 
 <script lang="ts">
     import { Bool, Empty } from "@generated/anki/generic_pb";
-    import { getNote } from "@generated/backend";
+    import { getNote, getNotetypeNames } from "@generated/backend";
     import * as tr from "@generated/ftl";
     import { createEventDispatcher, onDestroy, onMount } from "svelte";
 
+    import AddPreview from "./AddPreview.svelte";
     import { installBridgeHandler, parseBridgeCommand } from "./bridge";
+    import { settingsGet, settingsSet } from "./desktop-api";
     import { registerFrontendHandler, typedHandler } from "./frontend-service";
+    import {
+        kindOfNotetype,
+        type NotetypeKindOption,
+        notetypeKindOptions,
+    } from "./notetype-kinds";
     import { onRpcDone } from "./rpc-events";
 
     export let mode: "add" | "current" | "browser" = "add";
@@ -67,6 +74,60 @@ makes through FrontendService.
 
     let frame: HTMLIFrameElement;
     let ready = false;
+    // The quick picker (Basic / Both directions / Fill in the blank) above
+    // the Add editor; "More types…" opens the editor's own chooser.
+    let kinds: NotetypeKindOption[] = [];
+    let currentNotetype: bigint | null = null;
+    $: currentKind = kindOfNotetype(kinds, currentNotetype);
+
+    async function loadKinds(): Promise<void> {
+        const names = await getNotetypeNames({});
+        kinds = notetypeKindOptions(names.entries, {
+            basic: tr.notetypesBasicName(),
+            reversed: tr.notetypesBasicReversedName(),
+            cloze: tr.notetypesClozeName(),
+        });
+    }
+
+    function pickKind(option: NotetypeKindOption): void {
+        win()?.setNotetype?.(option.id.toString());
+        currentNotetype = option.id;
+    }
+
+    function moreTypes(): void {
+        (
+            win()?.document.querySelector(".chooser-button") as HTMLElement | null
+        )?.click();
+    }
+
+    function refreshCurrentNotetype(): void {
+        currentNotetype = getNoteInfo()?.notetypeId ?? null;
+    }
+
+    // Live preview of the card being typed (remembered per profile).
+    const PREVIEW_KEY = "addPreviewOpen";
+    let previewOpen = false;
+    let previewInfo: EditorNoteInfo | null = null;
+    let previewTimer: ReturnType<typeof setTimeout> | undefined;
+
+    function togglePreview(): void {
+        previewOpen = !previewOpen;
+        void settingsSet("profile", PREVIEW_KEY, previewOpen).catch(() => undefined);
+        if (previewOpen) {
+            refreshPreview();
+        }
+    }
+
+    /** Read the editor's note a moment after it changed. */
+    function refreshPreview(): void {
+        if (!previewOpen) {
+            return;
+        }
+        clearTimeout(previewTimer);
+        previewTimer = setTimeout(() => {
+            previewInfo = getNoteInfo();
+        }, 150);
+    }
     let loadedNote: bigint | null = null;
     let savedResolvers: (() => void)[] = [];
     let unregister: (() => void)[] = [];
@@ -112,6 +173,15 @@ makes through FrontendService.
             case "editorReady":
                 ready = true;
                 void load();
+                if (mode === "add") {
+                    void loadKinds();
+                    void settingsGet("profile", PREVIEW_KEY)
+                        .then((stored) => {
+                            previewOpen = stored === true;
+                            refreshPreview();
+                        })
+                        .catch(() => undefined);
+                }
                 break;
             case "saved": {
                 const resolvers = savedResolvers;
@@ -125,13 +195,20 @@ makes through FrontendService.
             case "blur":
             case "saveTags":
                 dispatch("changed");
+                refreshPreview();
                 break;
             case "preview":
                 // The browser editor's preview button (PreviewButton.svelte).
                 dispatch("preview");
                 break;
-            case "focus":
             case "editorState":
+                // Fired as the editor loads a note, so the picker follows the chooser.
+                if (mode === "add") {
+                    refreshCurrentNotetype();
+                    refreshPreview();
+                }
+                break;
+            case "focus":
             case "ioImageLoaded":
             case "paste":
             case "cut":
@@ -245,9 +322,97 @@ makes through FrontendService.
     });
 </script>
 
-<iframe bind:this={frame} src={url} title="editor" on:load={onLoad}></iframe>
+<div class="editor-panel">
+    {#if mode === "add" && kinds.length}
+        <div class="kinds" role="radiogroup" aria-label="Kind of card">
+            {#each kinds as option (option.kind)}
+                <button
+                    role="radio"
+                    aria-checked={currentKind === option.kind}
+                    class:active={currentKind === option.kind}
+                    title={option.hint}
+                    on:click={() => pickKind(option)}
+                >
+                    {option.label}
+                </button>
+            {/each}
+            <button
+                class="more"
+                title={tr.notetypesChangeNoteTypeCtrlandn()}
+                on:click={moreTypes}
+            >
+                More types…
+            </button>
+            <button
+                class="preview-toggle"
+                class:active={previewOpen}
+                aria-pressed={previewOpen}
+                title="Show the card this note will make"
+                on:click={togglePreview}
+            >
+                Preview
+            </button>
+        </div>
+    {/if}
+    <div class="body" class:split={mode === "add" && previewOpen}>
+        <iframe bind:this={frame} src={url} title="editor" on:load={onLoad}></iframe>
+        {#if mode === "add" && previewOpen}
+            <AddPreview info={previewInfo} {nightMode} />
+        {/if}
+    </div>
+</div>
 
 <style>
+    .kinds {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        padding: 6px 10px;
+        border-bottom: 1px solid var(--border);
+        background: var(--canvas-elevated);
+    }
+    .kinds button {
+        font: inherit;
+        color: var(--fg);
+        background: var(--button-bg);
+        border: 1px solid var(--border);
+        border-radius: var(--border-radius);
+        padding: 4px 12px;
+        cursor: pointer;
+    }
+    .kinds button.active {
+        background: var(--button-primary-bg);
+        color: white;
+        border-color: transparent;
+    }
+    .kinds button.more {
+        margin-inline-start: auto;
+        background: transparent;
+        border-color: transparent;
+        color: var(--fg-subtle);
+    }
+    .kinds button.more:hover {
+        color: var(--fg);
+        border-color: var(--border);
+    }
+    .kinds button.preview-toggle {
+        margin-inline-start: 0;
+    }
+    .editor-panel {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        min-height: 0;
+    }
+    .body {
+        flex: 1;
+        min-height: 0;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .body.split {
+        grid-template-columns: minmax(0, 1fr) minmax(280px, 38%);
+    }
     iframe {
         display: block;
         width: 100%;

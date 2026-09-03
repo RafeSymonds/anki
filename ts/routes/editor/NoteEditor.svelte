@@ -41,6 +41,8 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
 
     import { registerPackage } from "@tslib/runtime-require";
+
+    import { getPlatformString } from "@tslib/shortcuts";
     import {
         filenameToLink,
         openFilePickerForImageOcclusion,
@@ -329,6 +331,13 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         lastAddedNote = null;
     }
 
+    /** The app shell's quick picker above the Add editor switches note types here. */
+    function setNotetype(notetypeId: string): void {
+        if (mode === "add") {
+            void onNotetypeChange(BigInt(notetypeId));
+        }
+    }
+
     let notetypeMeta: NotetypeIdAndModTime | null = null;
     function setNotetypeMeta(notetype: Notetype): void {
         notetypeMeta = { id: notetype.id, modTime: notetype.mtimeSecs };
@@ -557,9 +566,12 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
             }
         }
         if (result.state === NoteFieldsCheckResponse_State.MISSING_CLOZE) {
+            // Say how to make a blank before asking whether to go on without one.
             const answer = (
                 await askUser({
-                    text: tr.addingYouHaveAClozeDeletionNote(),
+                    text: `No blanks yet. Select the words to hide and press the [...] button (${getPlatformString(
+                        "Control+Shift+C",
+                    )}).\n\n${tr.addingYouHaveAClozeDeletionNote()}`,
                 })
             ).val;
             if (!answer) {
@@ -1321,6 +1333,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
         Object.assign(globalThis, {
             loadNote,
+            setNotetype,
             reloadNote,
             reloadNoteIfEmpty,
             saveSession,

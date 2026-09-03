@@ -131,6 +131,19 @@ the Qt recorder's file. macOS only grants the microphone to a process with
 embeds it into the bare binary's `__info_plist` section for `bin/anki start`
 and the tests. The e2e spec stubs `getUserMedia` with a synthetic tone.
 
+**Kind of card.** Above the Add editor, a picker offers Basic, Both
+directions and Fill in the blank (`notetype-kinds.ts` maps them to the stock
+note types by name; a renamed one drops out) and "More types…" opens the
+editor's own chooser. The picker calls `setNotetype` on the editor window,
+an export added to NoteEditor.svelte for the shell. Adding a cloze note with
+no blank first says how to make one, then asks as before.
+
+**Live preview.** The Preview toggle in the same bar shows the first card
+the note will make (`AddPreview.svelte`, question and answer through
+`notetypes/preview.ts`), re-rendered a moment after each keystroke from the
+editor's `getNoteInfo`; the toggle is remembered per profile
+(`addPreviewOpen`).
+
 **Note type options.** Manage Note Types > Options edits the LaTeX header,
 footer and the dvisvgm flag (`OptionsDialog.svelte`, `latexOptions` /
 `setLatexOptions` in `notetypes.ts`), saved through `updateNotetype` like
