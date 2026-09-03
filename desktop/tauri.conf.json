@@ -1,24 +1,24 @@
 {
-  "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Anki",
-  "version": "0.1.0",
-  "identifier": "com.rafesymonds.anki",
-  "build": {
-    "frontendDist": "../out/sveltekit"
-  },
-  "app": {
-    "withGlobalTauri": false,
-    "windows": [],
-    "security": {
-      "csp": null
+    "$schema": "https://schema.tauri.app/config/2",
+    "productName": "Anki",
+    "version": "0.1.0",
+    "identifier": "com.rafesymonds.anki",
+    "build": {
+        "frontendDist": "../out/sveltekit"
+    },
+    "app": {
+        "withGlobalTauri": false,
+        "windows": [],
+        "security": {
+            "csp": null
+        }
+    },
+    "bundle": {
+        "active": true,
+        "targets": ["app", "dmg"],
+        "icon": ["icons/icon.icns", "icons/icon.png"],
+        "macOS": {
+            "minimumSystemVersion": "13.0"
+        }
     }
-  },
-  "bundle": {
-    "active": true,
-    "targets": ["app", "dmg"],
-    "icon": ["icons/icon.icns", "icons/icon.png"],
-    "macOS": {
-      "minimumSystemVersion": "13.0"
-    }
-  }
 }

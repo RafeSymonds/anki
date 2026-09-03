@@ -7,6 +7,9 @@
 #   bin/anki status            report whether it is running
 #   bin/anki build             build web assets and the app without launching
 #   bin/anki logs              tail the app log
+#   bin/anki serve [port] [--fresh]   serve over loopback HTTP (no window); --fresh uses a
+#                              throwaway seeded collection under out/anki-e2e-base
+#   bin/anki e2e               run the Playwright end-to-end tests against `serve`
 #
 # Env: ANKI_BASE (profile folder), ANKI_START_ROUTE (page to open, e.g. /congrats)
 
@@ -89,6 +92,20 @@ stop() {
     echo "stopped"
 }
 
+serve() {
+    local port="${1:-40100}"
+    shift || true
+    local base="$ANKI_BASE"
+    local seed=()
+    if [[ "${1:-}" == "--fresh" ]]; then
+        base="$ROOT/out/anki-e2e-base"
+        rm -rf "$base"
+        seed=(--seed 24)
+    fi
+    build_app
+    exec "$BIN" --serve "$port" --base "$base" "${seed[@]}"
+}
+
 status() {
     if is_running; then
         echo "running (pid $(pid))"
@@ -105,8 +122,10 @@ case "${1:-}" in
     status) status ;;
     build) build_web; build_app ;;
     logs) tail -n 50 -f "$LOG" ;;
+    serve) shift; serve "$@" ;;
+    e2e) just test-e2e-desktop ;;
     *)
-        sed -n '2,10p' "$0"
+        sed -n '2,14p' "$0"
         exit 2
         ;;
 esac

@@ -22,7 +22,7 @@ fn write_method_table() -> Result<()> {
     println!("cargo:rerun-if-changed={}", path.display());
     let bytes = fs::read(&path).with_context(|| format!("read {}", path.display()))?;
     let pool = DescriptorPool::decode(bytes.as_ref()).context("decode descriptors")?;
-    let (_collection, backend) = get_services(&pool);
+    let (collection, backend) = get_services(&pool);
 
     let mut buf = String::new();
     buf.push_str("/// (camelCase method name, service index, method index)\n");
@@ -43,6 +43,17 @@ fn write_method_table() -> Result<()> {
                 service.index,
                 method.index
             )?;
+        }
+    }
+    buf.push_str("];\n");
+
+    // Methods the web code calls that are implemented by the app shell, not
+    // rslib (FrontendService in proto/anki/frontend.proto).
+    buf.push_str("/// camelCase names of FrontendService methods\n");
+    buf.push_str("pub static FRONTEND_METHODS: &[&str] = &[\n");
+    for service in collection.iter().filter(|s| s.name == "FrontendService") {
+        for method in &service.trait_methods {
+            writeln!(buf, "    {:?},", snake_to_camel(&method.name))?;
         }
     }
     buf.push_str("];\n");

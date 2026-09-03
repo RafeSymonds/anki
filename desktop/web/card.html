@@ -1,0 +1,33 @@
+<!doctype html>
+<!--
+Copyright: Ankitects Pty Ltd and contributors
+License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
+
+The document the reviewer shows cards in. Mirrors what qt/aqt/reviewer.py
+builds with AnkiWebView.stdHtml(): the standard stylesheet, the reviewer
+stylesheet and the reviewer bundle, then the mark/flag markers and the
+question/answer container. The app shell drives it through the same
+_showQuestion/_showAnswer functions Python calls.
+-->
+<html dir="ltr" data-bs-theme="light">
+<head>
+    <meta charset="utf-8">
+    <base href="/">
+    <title>card</title>
+    <link rel="stylesheet" type="text/css" href="/_anki/css/webview.css">
+    <style>
+        body { background-color: var(--canvas); }
+        html { font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif; }
+        :root { --canvas: #ffffff; }
+        :root[class*=night-mode] { --canvas: #2c2c2c; }
+    </style>
+    <link rel="stylesheet" type="text/css" href="/_anki/css/reviewer.css">
+</head>
+<body class="isMac fancy">
+    <script src="/_anki/js/webview.js"></script>
+    <script src="/_anki/js/reviewer.js"></script>
+    <div id="_mark" hidden>&#x2605;</div>
+    <div id="_flag" hidden>&#x2691;</div>
+    <div id="qa" dir="auto"></div>
+</body>
+</html>

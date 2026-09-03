@@ -30,6 +30,11 @@ pub fn lookup(name: &str) -> Option<(u32, u32)> {
     table().get(name).copied()
 }
 
+/// True for methods the app shell implements instead of rslib.
+pub fn is_frontend_method(name: &str) -> bool {
+    FRONTEND_METHODS.contains(&name)
+}
+
 #[derive(Debug)]
 pub enum RpcError {
     UnknownMethod(String),
@@ -111,7 +116,12 @@ mod tests {
             );
         }
         // Spot checks against out/ts/lib/generated/backend.ts.
-        for expected in ["i18nResources", "congratsInfo", "getDeckNames", "openCollection"] {
+        for expected in [
+            "i18nResources",
+            "congratsInfo",
+            "getDeckNames",
+            "openCollection",
+        ] {
             assert!(lookup(expected).is_some(), "{expected} missing");
         }
     }
@@ -120,5 +130,8 @@ mod tests {
     fn frontend_only_services_are_excluded() {
         assert!(lookup("deckOptionsRequireClose").is_none());
         assert!(lookup("searchInBrowser").is_none());
+        assert!(is_frontend_method("deckOptionsRequireClose"));
+        assert!(is_frontend_method("getSchedulingStatesWithContext"));
+        assert!(!is_frontend_method("getDeckNames"));
     }
 }

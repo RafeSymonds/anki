@@ -111,8 +111,14 @@ mod tests {
     fn paths_follow_pylib_layout() {
         let paths = CollectionPaths::in_profile(Path::new("/base/User 1"));
         assert_eq!(paths.collection, Path::new("/base/User 1/collection.anki2"));
-        assert_eq!(paths.media_folder, Path::new("/base/User 1/collection.media"));
-        assert_eq!(paths.media_db, Path::new("/base/User 1/collection.media.db2"));
+        assert_eq!(
+            paths.media_folder,
+            Path::new("/base/User 1/collection.media")
+        );
+        assert_eq!(
+            paths.media_db,
+            Path::new("/base/User 1/collection.media.db2")
+        );
     }
 
     #[test]

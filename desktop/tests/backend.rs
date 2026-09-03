@@ -47,7 +47,10 @@ fn opens_a_fresh_collection_and_serves_rpcs() {
     )
     .unwrap();
     let text = String::from_utf8(json.json).unwrap();
-    assert!(text.contains("scheduling-congratulations-finished"), "{text}");
+    assert!(
+        text.contains("scheduling-congratulations-finished"),
+        "{text}"
+    );
 
     profile::close_collection(&backend).unwrap();
     assert!(dir.path().join("collection.anki2").exists());
@@ -64,12 +67,9 @@ fn unknown_method_is_reported_by_name() {
 #[test]
 fn calls_before_a_collection_is_open_fail_cleanly() {
     let backend = new_backend();
-    let err = rpc::call_typed::<_, DeckNames>(
-        &backend,
-        "getDeckNames",
-        &GetDeckNamesRequest::default(),
-    )
-    .unwrap_err();
+    let err =
+        rpc::call_typed::<_, DeckNames>(&backend, "getDeckNames", &GetDeckNamesRequest::default())
+            .unwrap_err();
     assert!(!err.is_unknown_method());
     assert!(!err.message().is_empty());
 }

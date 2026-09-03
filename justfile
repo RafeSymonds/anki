@@ -28,7 +28,7 @@ rebuild-web:
 
 # Build the web assets served by the desktop app (SvelteKit + page bundles)
 web:
-    {{ ninja }} sveltekit ts:pages ts:editor ts:reviewer ts:mathjax
+    {{ ninja }} qt:aqt:data:web
 
 # Build wheels (needed for some platforms)
 wheels:
@@ -74,6 +74,12 @@ test-ts coverage='' html='':
 test-e2e ui='': _install-playwright-browsers
     {{ ninja }} pyenv ts:generated pylib qt
     {{ playwright_env }} {{ yarn }} test:e2e {{ ui }}
+
+# Run Playwright end-to-end tests for the desktop shell (desktop/ + ts/lib/desktop). Pass --ui to open the interactive UI.
+[arg("ui", long="ui", value="--ui")]
+test-e2e-desktop ui='': _install-playwright-browsers
+    {{ ninja }} qt:aqt:data:web
+    {{ playwright_env }} {{ yarn }} playwright test -c playwright.desktop.config.ts {{ ui }}
 
 [private]
 _test:
