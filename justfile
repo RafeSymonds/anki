@@ -26,6 +26,10 @@ web-watch:
 rebuild-web:
     ./tools/rebuild-web
 
+# Build the web assets served by the desktop app (SvelteKit + page bundles)
+web:
+    {{ ninja }} sveltekit ts:pages ts:editor ts:reviewer ts:mathjax
+
 # Build wheels (needed for some platforms)
 wheels:
     {{ ninja }} wheels

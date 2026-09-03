@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+# Lifecycle for the Anki desktop app (Tauri shell in desktop/).
+#
+#   bin/anki start [--build]   build (web assets only with --build) and launch
+#   bin/anki stop              quit the running app
+#   bin/anki restart           stop, rebuild everything, start
+#   bin/anki status            report whether it is running
+#   bin/anki build             build web assets and the app without launching
+#   bin/anki logs              tail the app log
+#
+# Env: ANKI_BASE (profile folder), ANKI_START_ROUTE (page to open, e.g. /congrats)
+
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PIDFILE="$ROOT/out/anki-desktop.pid"
+LOG="$ROOT/out/anki-desktop.log"
+BIN="$ROOT/target/debug/anki-desktop"
+
+cd "$ROOT"
+
+# Where profiles live. Defaults to a throwaway folder inside out/ so a dev
+# build never touches the real collection by accident. Point ANKI_BASE at
+# "$HOME/Library/Application Support/Anki2" to use the Qt app's data.
+export ANKI_BASE="${ANKI_BASE:-$ROOT/out/anki-dev-base}"
+
+build_web() {
+    echo "==> building web assets"
+    just web
+}
+
+build_app() {
+    echo "==> building desktop app"
+    cargo build -p anki-desktop
+}
+
+pid() {
+    [[ -f "$PIDFILE" ]] && cat "$PIDFILE" || true
+}
+
+is_running() {
+    local p
+    p="$(pid)"
+    [[ -n "$p" ]] && kill -0 "$p" 2>/dev/null
+}
+
+start() {
+    local build=0
+    [[ "${1:-}" == "--build" ]] && build=1
+    if is_running; then
+        echo "already running (pid $(pid))"
+        return 0
+    fi
+    if [[ $build -eq 1 || ! -d "$ROOT/out/sveltekit" ]]; then
+        build_web
+    fi
+    build_app
+    mkdir -p "$ROOT/out"
+    nohup "$BIN" >"$LOG" 2>&1 &
+    echo $! >"$PIDFILE"
+    sleep 1
+    if is_running; then
+        echo "started (pid $(pid)), base: $ANKI_BASE, log: $LOG"
+    else
+        echo "failed to start; last log lines:" >&2
+        tail -n 20 "$LOG" >&2
+        rm -f "$PIDFILE"
+        return 1
+    fi
+}
+
+stop() {
+    if ! is_running; then
+        echo "not running"
+        rm -f "$PIDFILE"
+        return 0
+    fi
+    local p
+    p="$(pid)"
+    kill "$p"
+    for _ in $(seq 1 50); do
+        kill -0 "$p" 2>/dev/null || break
+        sleep 0.1
+    done
+    if kill -0 "$p" 2>/dev/null; then
+        kill -9 "$p"
+    fi
+    rm -f "$PIDFILE"
+    echo "stopped"
+}
+
+status() {
+    if is_running; then
+        echo "running (pid $(pid))"
+    else
+        echo "not running"
+        return 1
+    fi
+}
+
+case "${1:-}" in
+    start) shift; start "$@" ;;
+    stop) stop ;;
+    restart) stop; start --build ;;
+    status) status ;;
+    build) build_web; build_app ;;
+    logs) tail -n 50 -f "$LOG" ;;
+    *)
+        sed -n '2,10p' "$0"
+        exit 2
+        ;;
+esac

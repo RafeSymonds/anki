@@ -1,0 +1,37 @@
+[package]
+name = "anki-desktop"
+version.workspace = true
+authors = ["Rafe Symonds"]
+edition.workspace = true
+license.workspace = true
+publish = false
+rust-version.workspace = true
+description = "Anki desktop shell for macOS, built on Tauri"
+
+[lib]
+name = "anki_desktop"
+path = "src/lib.rs"
+
+[[bin]]
+name = "anki-desktop"
+path = "src/main.rs"
+
+[build-dependencies]
+anki_proto_gen.workspace = true
+anyhow.workspace = true
+prost-reflect.workspace = true
+tauri-build.workspace = true
+
+[dependencies]
+anki = { workspace = true, features = ["native-tls"] }
+anki_i18n.workspace = true
+anki_proto.workspace = true
+anyhow.workspace = true
+dirs.workspace = true
+prost.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tauri.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

@@ -10,6 +10,7 @@ members = [
   "build/configure",
   "build/ninja_gen",
   "build/runner",
+  "desktop",
   "ftl",
   "pylib/rsbridge",
   "rslib",
@@ -128,6 +129,8 @@ snafu = { version = "0.8.6", features = ["rust_1_61"] }
 strum = { version = "0.27.1", features = ["derive"] }
 syn = { version = "2.0.103", features = ["parsing", "printing"] }
 tar = "0.4.46"
+tauri = "2"
+tauri-build = "2"
 tempfile = "3.20.0"
 termcolor = "1.4.1"
 tokio = { version = "1.45", features = ["fs", "rt-multi-thread", "macros", "signal"] }

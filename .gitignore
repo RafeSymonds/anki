@@ -24,3 +24,5 @@ ts/.svelte-kit
 docs/_build/
 docs/autoapi/
 .complexipy_cache
+/desktop/gen
+/out/anki-desktop.pid
