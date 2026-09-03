@@ -22,7 +22,8 @@ pub fn backup_folder(profile_dir: &Path) -> PathBuf {
 }
 
 /// Ask rslib for a backup of the open collection; waits until it is written.
-/// Returns whether one was created (rslib skips it when too recent, unless forced).
+/// Returns whether one was created (rslib skips it when too recent, unless
+/// forced).
 pub fn create_backup(state: &AppState, force: bool) -> Result<bool> {
     let profile_dir = state.profile_dir().context("no profile open")?;
     let folder = backup_folder(&profile_dir);

@@ -366,7 +366,10 @@ mod tests {
         let dark = ground_color(true);
         let light = ground_color(false);
         assert_eq!((dark.0, dark.1, dark.2, dark.3), (0x15, 0x17, 0x1c, 0xff));
-        assert_eq!((light.0, light.1, light.2, light.3), (0xf1, 0xf3, 0xf8, 0xff));
+        assert_eq!(
+            (light.0, light.1, light.2, light.3),
+            (0xf1, 0xf3, 0xf8, 0xff)
+        );
         assert!(crate::scheme::FIRST_PAINT_CSS.contains("#15171c"));
         assert!(crate::scheme::FIRST_PAINT_CSS.contains("#f1f3f8"));
     }

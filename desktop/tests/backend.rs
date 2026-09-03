@@ -73,7 +73,8 @@ fn missing_config_keys_read_as_null_like_mediasrv() {
     profile::open_collection(&backend, dir.path()).unwrap();
 
     let key = |val: &str| anki_proto::generic::String { val: val.into() };
-    // The editor asks for keys that only exist once set (mediasrv.py::get_config_json).
+    // The editor asks for keys that only exist once set
+    // (mediasrv.py::get_config_json).
     let missing: Json = rpc::call_typed(&backend, "getConfigJson", &key("renderMathjax")).unwrap();
     assert_eq!(missing.json, b"null");
     // Keys that exist keep their value.

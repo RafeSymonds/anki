@@ -88,7 +88,11 @@ pub fn deck_files_in(dir: &Path) -> Vec<DeckFile> {
 }
 
 fn sort_newest_first(files: &mut [DeckFile]) {
-    files.sort_by(|a, b| b.modified.cmp(&a.modified).then_with(|| a.name.cmp(&b.name)));
+    files.sort_by(|a, b| {
+        b.modified
+            .cmp(&a.modified)
+            .then_with(|| a.name.cmp(&b.name))
+    });
 }
 
 /// What the Get Shared Decks screen lists, across all search folders.
@@ -153,7 +157,10 @@ mod tests {
     fn newest_file_comes_first() {
         let dir = tempdir().unwrap();
         let now = SystemTime::now();
-        touch(&dir.path().join("old.apkg"), now - Duration::from_secs(3600));
+        touch(
+            &dir.path().join("old.apkg"),
+            now - Duration::from_secs(3600),
+        );
         touch(&dir.path().join("new.apkg"), now);
         let files = deck_files_in(dir.path());
         assert_eq!(files[0].name, "new.apkg");
