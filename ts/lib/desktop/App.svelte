@@ -8,10 +8,11 @@ active.
 -->
 <script lang="ts">
     import type { DeckTreeNode } from "@generated/anki/decks_pb";
-    import { studiedToday } from "@generated/backend";
+    import { buildSearchString, studiedToday } from "@generated/backend";
     import * as tr from "@generated/ftl";
     import { onDestroy, onMount } from "svelte";
 
+    import BrowserScreen from "./browser/BrowserScreen.svelte";
     import type { DeckRow } from "./decks";
     import {
         createDeck,
@@ -38,6 +39,7 @@ active.
         | { kind: "overview" }
         | { kind: "review" }
         | { kind: "add" }
+        | { kind: "browse"; search: string | null }
         | { kind: "page"; title: string; src: string; onClose?: () => void };
 
     let tree: DeckTreeNode | null = null;
@@ -50,6 +52,7 @@ active.
     let reviewer: Reviewer;
     let embedded: EmbeddedPage;
     let addEditor: EditorPanel;
+    let browser: BrowserScreen;
     let toast: string | null = null;
     let toastTimer: ReturnType<typeof setTimeout> | undefined;
     let refreshTimer: ReturnType<typeof setTimeout> | undefined;
@@ -131,6 +134,23 @@ active.
         void refreshDecks();
     }
 
+    // Browser (ts/lib/desktop/browser): opened from the titlebar, "B", or a
+    // page's searchInBrowser call.
+    function openBrowser(search: string | null = null): void {
+        if (screen.kind === "browse") {
+            if (search !== null) {
+                void browser?.searchForTerms(search);
+            }
+            return;
+        }
+        screen = { kind: "browse", search };
+    }
+
+    function closeBrowser(): void {
+        screen = { kind: "overview" };
+        void refreshDecks();
+    }
+
     async function onCreateDeck(): Promise<void> {
         const name = prompt(tr.decksNewDeckName(), "");
         if (!name?.trim()) {
@@ -189,6 +209,7 @@ active.
             },
         ],
         ["a", () => openAdd()],
+        ["b", () => openBrowser()],
         [
             "s",
             () => {
@@ -218,6 +239,10 @@ active.
     ]);
 
     function onKeydown(event: KeyboardEvent): void {
+        // The browser's shortcuts also apply inside its search box.
+        if (screen.kind === "browse" && browser?.handleKey(event)) {
+            return;
+        }
         if (isTypingTarget(event.target)) {
             return;
         }
@@ -239,6 +264,9 @@ active.
             notify: showToast,
             askUser: async (text) => confirm(text),
             showMessage: async (text) => alert(text),
+            searchInBrowser: (node) => {
+                void buildSearchString(node).then((search) => openBrowser(search.val));
+            },
         });
         offRpcDone = onRpcDone((method) => {
             if (isOperation(method)) {
@@ -293,6 +321,11 @@ active.
                     ‹ {tr.actionsClose()}
                 </button>
                 <span class="title">{tr.actionsAdd()}</span>
+            {:else if screen.kind === "browse"}
+                <button class="back" on:click={() => browser?.requestClose()}>
+                    ‹ {tr.actionsClose()}
+                </button>
+                <span class="title">Browse</span>
             {:else if screen.kind === "review"}
                 <button class="back" on:click={onReviewFinished}>
                     ‹ {tr.actionsDecks()}
@@ -306,6 +339,15 @@ active.
                 </span>
             {/if}
             <span class="spacer"></span>
+            {#if screen.kind !== "browse"}
+                <button
+                    class="tool"
+                    title={tr.actionsShortcutKey({ val: "B" })}
+                    on:click={() => openBrowser()}
+                >
+                    Browse
+                </button>
+            {/if}
             {#if screen.kind !== "add"}
                 <button
                     class="tool"
@@ -334,6 +376,15 @@ active.
                     deckId={currentDeckId}
                     {nightMode}
                     on:close={closeAdd}
+                />
+            {:else if screen.kind === "browse"}
+                <BrowserScreen
+                    bind:this={browser}
+                    initialSearch={screen.search}
+                    {nightMode}
+                    on:close={closeBrowser}
+                    on:undone={(e) => onUndone(e.detail)}
+                    on:notify={(e) => showToast(e.detail)}
                 />
             {:else if screen.kind === "page"}
                 <EmbeddedPage

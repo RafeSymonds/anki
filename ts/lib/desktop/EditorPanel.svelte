@@ -2,8 +2,9 @@
 Copyright: Ankitects Pty Ltd and contributors
 License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-Hosts the Svelte note editor (ts/routes/editor) for adding a note or
-editing the card being reviewed, driven the way qt/aqt/editor.py drives it:
+Hosts the Svelte note editor (ts/routes/editor) for adding a note, editing
+the card being reviewed or the note selected in the browser, driven the way
+qt/aqt/editor.py drives it:
 wait for "editorReady", call loadNote(), and answer the close requests it
 makes through FrontendService.
 -->
@@ -16,13 +17,19 @@ makes through FrontendService.
     import { installBridgeHandler, parseBridgeCommand } from "./bridge";
     import { registerFrontendHandler, typedHandler } from "./frontend-service";
 
-    export let mode: "add" | "current" = "add";
+    export let mode: "add" | "current" | "browser" = "add";
     export let noteId: bigint | null = null;
     export let cardId: bigint | null = null;
     export let deckId: bigint | null = null;
     export let nightMode = false;
+    /** Keys pressed inside the editor document, for the host screen's shortcuts. */
+    export let onKeydown: ((event: KeyboardEvent) => void) | null = null;
 
-    const dispatch = createEventDispatcher<{ close: void; changed: void }>();
+    const dispatch = createEventDispatcher<{
+        close: void;
+        changed: void;
+        preview: void;
+    }>();
 
     /* eslint-disable @typescript-eslint/no-explicit-any */
     type EditorWindow = Window & Record<string, any>;
@@ -88,6 +95,10 @@ makes through FrontendService.
             case "saveTags":
                 dispatch("changed");
                 break;
+            case "preview":
+                // The browser editor's preview button (PreviewButton.svelte).
+                dispatch("preview");
+                break;
             case "focus":
             case "editorState":
             case "ioImageLoaded":
@@ -104,18 +115,23 @@ makes through FrontendService.
         const w = win();
         if (w) {
             installBridgeHandler(w, (command) => onBridge(command));
-            // Escape inside the editor closes it, as in the Qt windows.
+            // Escape inside the editor closes it, as in the Qt windows; the
+            // browser's editor leaves that to the browser screen.
             w.document.addEventListener("keydown", (event) => {
-                if (event.key === "Escape") {
+                if (event.key === "Escape" && mode !== "browser") {
                     event.preventDefault();
                     void requestClose();
+                } else {
+                    onKeydown?.(event);
                 }
             });
         }
     }
 
     /** Flush pending field edits; resolves once the editor reports "saved". */
-    export function saveNow(): Promise<void> {
+    export async function saveNow(): Promise<void> {
+        // Saving while a reload is in flight would write the old note back.
+        await reloading;
         return new Promise((resolve) => {
             const w = win();
             if (!ready || !w?.saveNow) {
@@ -126,6 +142,19 @@ makes through FrontendService.
             setTimeout(resolve, 2000);
             w.saveNow(false);
         });
+    }
+
+    let reloading: Promise<void> = Promise.resolve();
+
+    /** Reload the note after another part of the app changed it, unless the
+     * change came from this editor (`Editor.reload_note`, called from
+     * `Browser.on_operation_did_execute` when note text changed). */
+    export function reloadNote(from: Window | null = null): void {
+        const w = win();
+        if (!ready || !w?.reloadNote || from === w) {
+            return;
+        }
+        reloading = Promise.resolve(w.reloadNote()).catch(() => undefined);
     }
 
     /** Close the way the window's close button would: the add editor may

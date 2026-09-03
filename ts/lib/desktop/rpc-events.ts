@@ -51,6 +51,9 @@ export const OPERATION_METHODS = new Set([
     "restoreBuriedAndSuspendedCards",
     "sortCards",
     "gradeNow",
+    "setDeck",
+    "findAndReplace",
+    "findAndReplaceTag",
 ]);
 
 export function isOperation(method: string): boolean {
