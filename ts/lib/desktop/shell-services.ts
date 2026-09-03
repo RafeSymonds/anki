@@ -35,6 +35,10 @@ export interface ShellHooks {
     showMessage(text: string, title?: string): Promise<void>;
     /** Open the browser with a search; may be unavailable. */
     searchInBrowser?(search: SearchNode): void;
+    /** The editor in `frame` asked for the Fields dialog of its note type. */
+    openFieldsDialog?(frame: Window): void;
+    /** The editor in `frame` asked for the card templates of its note. */
+    openCardsDialog?(frame: Window): void;
 }
 
 const encoder = new TextEncoder();
@@ -198,15 +202,23 @@ export function installShellServices(hooks: ShellHooks): () => void {
         ),
         registerFrontendHandler(
             "openFieldsDialog",
-            typedHandler(Empty, () => {
-                hooks.notify("Fields are not editable here yet");
+            typedHandler(Empty, (_input, frame) => {
+                if (hooks.openFieldsDialog) {
+                    hooks.openFieldsDialog(frame);
+                } else {
+                    hooks.notify("Fields are not editable here yet");
+                }
                 return new Empty();
             }),
         ),
         registerFrontendHandler(
             "openCardsDialog",
-            typedHandler(Empty, () => {
-                hooks.notify("Card templates are not editable here yet");
+            typedHandler(Empty, (_input, frame) => {
+                if (hooks.openCardsDialog) {
+                    hooks.openCardsDialog(frame);
+                } else {
+                    hooks.notify("Card templates are not editable here yet");
+                }
                 return new Empty();
             }),
         ),

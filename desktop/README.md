@@ -36,6 +36,7 @@ ts/lib/desktop/              the Svelte app shell (mounted by ts/routes/+page.sv
   rpc-events.ts              "a backend call ran" notifications (stand-in for operation_did_execute)
   desktop-api.ts             calls to /_desktop/* (native side)
   decks.ts, card-html.ts, audio.ts, shortcuts.ts   pure logic with vitest tests next to them
+  notetypes/                 note type list, Fields dialog and card layout (models.py, fields.py, clayout.py)
 ts/tests/desktop/            Playwright e2e specs (run against `anki-desktop --serve`);
                              monkey.spec.ts is a seeded UI random walk (ANKI_MONKEY_SEED/STEPS)
 playwright.desktop.config.ts

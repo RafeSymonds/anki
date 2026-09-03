@@ -85,6 +85,8 @@ export interface CardView {
     getTypedAnswer(): string | null;
     /** Run the user's custom scheduling JS inside the card document. */
     runStateMutation?(key: string, js: string): Promise<void>;
+    /** Show one side of a card being edited (the card layout preview). */
+    showPreview?(html: string, bodyClass: string): void;
 }
 
 export interface AnswerButton {
