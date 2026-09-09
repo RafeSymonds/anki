@@ -309,10 +309,12 @@ html, body { background-color: #f1f3f8; color: #171a20; }
 }"#;
 
 /// The same for the card frame, which must not touch the text colour: that
-/// belongs to the note type's own stylesheet.
+/// belongs to the note type's own stylesheet. The frame is shown inside the
+/// shell's card pane, so these are the raised surface of
+/// ts/lib/desktop/theme.ts (`--app-surface`), not the window ground.
 pub const CARD_FIRST_PAINT_CSS: &str = r#"
 :root { color-scheme: light; }
-html, body { background-color: #f1f3f8; }
+html, body { background-color: #ffffff; }
 @media (prefers-color-scheme: dark) {
   :root { color-scheme: dark; }
   html, body { background-color: #1d2027; }
@@ -617,6 +619,9 @@ mod tests {
         assert!(!CARD_FIRST_PAINT_CSS.contains("; color:"));
         assert!(!CARD_FIRST_PAINT_CSS.contains(" color: #171a20"));
         assert!(!CARD_FIRST_PAINT_CSS.contains(" color: #e8ebf2"));
+        // ...and paints the shell's raised surface, the colour of the pane
+        // it sits in, rather than the window ground behind it.
+        assert!(CARD_FIRST_PAINT_CSS.contains("background-color: #ffffff"));
         assert!(CARD_FIRST_PAINT_CSS.contains("background-color: #1d2027"));
     }
 

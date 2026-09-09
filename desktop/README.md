@@ -150,6 +150,18 @@ text (controls excluded) and `click-to-edit.ts` matches it against the
 note's fields. Help > Getting Started and the welcome panel link to the
 manual's first chapter (`links.ts`).
 
+**The card sheet.** The card renders in a pane, not in the whole window the
+Qt webview was, and `desktop/web/card.html` is written against that: its
+rules come after webview.css and reviewer.css so they win, they redefine
+`--canvas` to the raised surface (`--canvas-elevated`) on both the root and
+the body so the frame is the same colour as the pane behind it, and the body
+is given a `min-height` so the note type's own background covers the pane
+rather than a strip of it. Images are capped against the pane minus the
+document's margins instead of upstream's 95vh, which assumed the card owned
+the window. A card longer than the pane still scrolls inside the frame, and
+because macOS hides the scrollbar until you reach for it, `CardFrame` reports
+which edges are cut and `Reviewer` shades them.
+
 **Live preview.** The Preview toggle in the same bar shows the first card
 the note will make (`AddPreview.svelte`, question and answer through
 `notetypes/preview.ts`), re-rendered a moment after each keystroke from the

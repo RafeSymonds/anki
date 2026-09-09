@@ -102,6 +102,8 @@ const LIGHT = `
     --app-review-soft: #e3f5ed;
     --app-shadow-card: 0 1px 2px rgba(18, 22, 33, 0.05), 0 6px 18px rgba(18, 22, 33, 0.07);
     --app-shadow-pop: 0 8px 30px rgba(18, 22, 33, 0.16);
+    /* Shading for an edge that cuts content off, as a gradient's solid end. */
+    --app-shadow-edge: rgba(18, 22, 33, 0.13);
 
     /* Bootstrap paints the body and its buttons from its own variables on
        the pages the shell embeds. */
@@ -177,6 +179,7 @@ const DARK = `
     --app-review-soft: #16302a;
     --app-shadow-card: 0 1px 2px rgba(0, 0, 0, 0.45), 0 8px 24px rgba(0, 0, 0, 0.35);
     --app-shadow-pop: 0 10px 34px rgba(0, 0, 0, 0.55);
+    --app-shadow-edge: rgba(0, 0, 0, 0.42);
 
     --bs-body-bg: #15171c;
     --bs-body-color: #e8ebf2;

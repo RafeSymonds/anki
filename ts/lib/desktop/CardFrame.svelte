@@ -18,6 +18,8 @@ JS, so keeping them in their own document keeps them out of the shell.
     /** A click on card text, with that element's text (controls excluded). */
     export let onClick: ((text: string) => void) | null = null;
     export let nightMode = false;
+    /** Called with which edges the card runs past, so the pane can show it. */
+    export let onOverflow: ((above: boolean, below: boolean) => void) | null = null;
 
     /* eslint-disable @typescript-eslint/no-explicit-any */
     type CardWindow = Window & Record<string, any>;
@@ -54,6 +56,30 @@ JS, so keeping them in their own document keeps them out of the shell.
             }
         }
         return "";
+    }
+
+    /**
+     * A card taller than the pane scrolls inside the frame, but macOS hides
+     * the scrollbar until you touch it, so a clipped card just looks broken.
+     * Tell the pane which edges are cut instead. A tolerance of a pixel keeps
+     * sub-pixel document heights from reporting a permanent overflow.
+     */
+    function reportOverflow(): void {
+        const w = win();
+        if (!onOverflow || !w?.document?.documentElement) {
+            return;
+        }
+        const root = w.document.documentElement;
+        const top = w.scrollY;
+        const hidden = root.scrollHeight - root.clientHeight;
+        onOverflow(top > 1, hidden - top > 1);
+    }
+
+    /** Watch the card document, which grows as images and answers land. */
+    function watchOverflow(w: CardWindow): void {
+        w.addEventListener("scroll", reportOverflow, { passive: true });
+        w.addEventListener("resize", reportOverflow);
+        new w.ResizeObserver(reportOverflow).observe(w.document.documentElement);
     }
 
     function whenReady(fn: () => void): void {
@@ -106,6 +132,7 @@ JS, so keeping them in their own document keeps them out of the shell.
             }
         });
         applyTheme();
+        watchOverflow(w);
         ready = true;
         const queued = pending;
         pending = [];

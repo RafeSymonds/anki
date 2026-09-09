@@ -15,17 +15,48 @@ _showQuestion/_showAnswer functions Python calls.
     <base href="/">
     <title>card</title>
     <link rel="stylesheet" type="text/css" href="/_anki/css/webview.css">
+    <link rel="stylesheet" type="text/css" href="/_anki/css/reviewer.css">
+    <!-- This fork's own rules. They come after both upstream sheets because
+         reviewer.css sets body margin and img sizing of its own, and these
+         have to win. -->
     <style>
-        body { background-color: var(--canvas); }
+        /* The frame sits inside the shell's card pane, so it paints that
+           raised surface rather than the window ground. Redefining --canvas
+           keeps webview.css's `body { background: var(--canvas) }` and
+           reviewer.css's `body.nightMode` rule in step with it, in both
+           themes. The tripled :root beats the shell theme's :root:root, and
+           body needs its own turn because the theme redefines the tokens
+           there too, on the nightMode class the reviewer puts on the body. */
+        :root:root:root,
+        :root:root:root body {
+            --canvas: var(--canvas-elevated);
+        }
+        :root:root:root {
+            --card-margin-y: 28px;
+            --card-margin-x: 40px;
+        }
         /* A calmer surface than the Qt default (20px): more room around
            the card, and a reading measure on wide windows. */
-        body { margin: 28px 40px; }
+        body {
+            margin: var(--card-margin-y) var(--card-margin-x);
+            /* The note type's own .card background lands on body, and body
+               is only as tall as the card's text. Without this a short card
+               paints a strip of its colour and leaves the rest of the pane
+               showing the frame behind it. border-box because webview.css
+               makes everything content-box, and a note type that pads .card
+               would otherwise push the body past the pane. */
+            box-sizing: border-box;
+            min-height: calc(100vh - 2 * var(--card-margin-y));
+        }
         #qa { max-width: 1000px; margin: 0 auto; }
+        /* reviewer.css caps images at 95vh, which assumes the card owns the
+           whole window. Here 95vh plus the margins above is always taller
+           than the pane, so a card fronted by one big image pushed its
+           prompt off the bottom and the jump to the answer then cut the top
+           of the image away. Budget the margins and a line of prompt text. */
+        img { max-height: calc(100vh - 2 * var(--card-margin-y) - 1.6em); }
         html { font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif; }
-        :root { --canvas: #ffffff; }
-        :root[class*=night-mode] { --canvas: #2c2c2c; }
     </style>
-    <link rel="stylesheet" type="text/css" href="/_anki/css/reviewer.css">
 </head>
 <body class="isMac fancy">
     <script src="/_anki/js/webview.js"></script>

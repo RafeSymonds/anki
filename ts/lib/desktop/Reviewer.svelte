@@ -47,6 +47,9 @@ Edit, Undo and the card actions menu.
     let sessionTotal = 0;
     let editing = false;
     let menuOpen = false;
+    /** Whether the card runs past the top or bottom of its pane. */
+    let cutAbove = false;
+    let cutBelow = false;
     let elapsed = 0;
     let ticker: ReturnType<typeof setInterval> | undefined;
     let offRpcDone: (() => void) | undefined;
@@ -267,13 +270,17 @@ Edit, Undo and the card actions menu.
         <span class="progress-fill" style="width: {donePercent}%"></span>
     </div>
     <div class="card-area" class:split={editing}>
-        <div class="card-pane">
+        <div class="card-pane" class:cut-above={cutAbove} class:cut-below={cutBelow}>
             <CardFrame
                 bind:this={frame}
                 {nightMode}
                 onCommand={(command) => controller.onBridgeCommand(command)}
                 onKeydown={(event) => handleKey(event)}
                 onClick={(text) => void onCardClick(text)}
+                onOverflow={(above, below) => {
+                    cutAbove = above;
+                    cutBelow = below;
+                }}
             />
             {#if $notice}
                 <div class="notice">{$notice}</div>
@@ -543,6 +550,38 @@ Edit, Undo and the card actions menu.
         border-radius: var(--app-radius-large);
         box-shadow: var(--app-shadow-card);
         overflow: hidden;
+    }
+    /* A card longer than the sheet scrolls inside the frame, but macOS keeps
+       its scrollbar hidden until you reach for it, so a clipped card reads as
+       a broken one. Shade whichever edge the card runs past. */
+    .card-pane::before,
+    .card-pane::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        height: 28px;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity var(--transition) ease-out;
+    }
+    .card-pane::before {
+        top: 0;
+        background: linear-gradient(to bottom, var(--app-shadow-edge), transparent);
+    }
+    .card-pane::after {
+        bottom: 0;
+        background: linear-gradient(to top, var(--app-shadow-edge), transparent);
+    }
+    .card-pane.cut-above::before,
+    .card-pane.cut-below::after {
+        opacity: 1;
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .card-pane::before,
+        .card-pane::after {
+            transition: none;
+        }
     }
     .editor-pane {
         display: flex;
