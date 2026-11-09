@@ -15,13 +15,15 @@
 #   bin/anki worktree-init     prepare out/ in a git worktree (shares heavy deps with the main checkout)
 #   bin/anki package [--universal]    build a self-contained Anki.app and .dmg (target/release/bundle)
 #   bin/anki release <version> build and publish that version on GitHub (Actions does the work)
+#   bin/anki update            install the newest GitHub release over the installed app
 #   bin/anki bench [port]      measure cold start and backend call latency in HTTP mode
 #
 # Env: ANKI_BASE (profile folder), ANKI_START_ROUTE (page to open, e.g. /congrats)
 
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# realpath so a symlink on PATH (`anki update` from anywhere) finds the checkout.
+ROOT="$(cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")/.." && pwd)"
 PIDFILE="$ROOT/out/anki-desktop.pid"
 LOG="$ROOT/out/anki-desktop.log"
 BIN="$ROOT/target/debug/anki-desktop"
@@ -251,9 +253,10 @@ case "${1:-}" in
     worktree-init) worktree_init ;;
     package) shift; package "$@" ;;
     release) shift; release "$@" ;;
+    update) shift; "$ROOT/bin/install-anki" --update "$@" ;;
     bench) shift; bench "$@" ;;
     *)
-        sed -n '2,20p' "$0"
+        sed -n '2,21p' "$ROOT/bin/anki"
         exit 2
         ;;
 esac

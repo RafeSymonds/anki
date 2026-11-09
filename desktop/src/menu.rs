@@ -21,6 +21,7 @@ use tauri::Runtime;
 
 /// (id, label, accelerator) for the app's own menu items.
 pub const ITEMS: &[(&str, &str, Option<&str>)] = &[
+    ("check_updates", "Check for Updates…", None),
     ("preferences", "Preferences…", Some("CmdOrCtrl+,")),
     ("sync", "Sync", None),
     (
@@ -72,6 +73,7 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         true,
         &[
             &PredefinedMenuItem::about(app, Some("About Anki"), Some(about))?,
+            &item(app, "check_updates")?,
             &PredefinedMenuItem::separator(app)?,
             &item(app, "preferences")?,
             &PredefinedMenuItem::separator(app)?,

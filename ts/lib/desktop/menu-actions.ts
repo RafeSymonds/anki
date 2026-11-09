@@ -8,6 +8,7 @@
  */
 
 export const MENU_IDS = [
+    "check_updates",
     "preferences",
     "sync",
     "switch_profile",

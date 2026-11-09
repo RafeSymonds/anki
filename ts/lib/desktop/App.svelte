@@ -29,9 +29,12 @@ active.
     import DeckSidebar from "./DeckSidebar.svelte";
     import EditorPanel, { editorNoteInfo } from "./EditorPanel.svelte";
     import {
+        checkForUpdate,
+        downloadUpdate,
         openLink,
         quitApp,
         reopenCollection,
+        restartToUpdate,
         settingsGet,
         settingsSet,
     } from "./desktop-api";
@@ -62,6 +65,8 @@ active.
     } from "./sync/sync";
     import { backendSyncRpc } from "./sync/sync-rpc";
     import SyncPanel from "./sync/SyncPanel.svelte";
+    import UpdateNotice from "./UpdateNotice.svelte";
+    import { UPDATE_CHECK_MS, UpdateController } from "./updates";
 
     type Screen =
         | { kind: "overview" }
@@ -120,6 +125,15 @@ active.
     );
     const syncing = sync.syncing;
     const syncStatus = sync.status;
+
+    const updates = new UpdateController(
+        {
+            check: checkForUpdate,
+            download: downloadUpdate,
+            restart: restartToUpdate,
+        },
+        (message) => showToast(message),
+    );
 
     const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
 
@@ -325,6 +339,7 @@ active.
 
     let uninstallMenu: (() => void) | undefined;
     let mediaSyncTimer: ReturnType<typeof setInterval> | undefined;
+    let updateTimer: ReturnType<typeof setInterval> | undefined;
 
     // The host asks the shell to finish before the window closes (Cmd+Q, the
     // close button, Quit in the menu): sync on quit if enabled, then quit.
@@ -343,9 +358,26 @@ active.
         }
     }
 
+    /** beforeQuit's sync, ending in the update and relaunch instead of a quit. */
+    async function restartForUpdate(): Promise<void> {
+        if (quitting) {
+            return;
+        }
+        quitting = true;
+        try {
+            await sync.autoSync();
+        } catch (err) {
+            console.warn("sync before update failed", err);
+        }
+        // When the install succeeds the app is on its way out; otherwise it
+        // carries on, and quitting has to work again.
+        quitting = await updates.restart();
+    }
+
     function installMenu(): void {
         uninstallMenu = installMenuHandlers(
             {
+                check_updates: () => updates.checkNow(),
                 preferences: () => tools?.run("preferences"),
                 sync: () => void sync.sync(),
                 switch_profile: () => tools?.run("switchProfile"),
@@ -525,6 +557,8 @@ active.
         });
         currentDeckId = await fetchCurrentDeckId();
         await refreshDecks();
+        void updates.checkQuietly();
+        updateTimer = setInterval(() => void updates.checkQuietly(), UPDATE_CHECK_MS);
         // maybe_auto_sync_on_open_close in main.py (the close side is in
         // beforeQuit), then the periodic media sync check.
         if (!(await sync.autoSync())) {
@@ -539,6 +573,9 @@ active.
     onDestroy(() => {
         if (mediaSyncTimer) {
             clearInterval(mediaSyncTimer);
+        }
+        if (updateTimer) {
+            clearInterval(updateTimer);
         }
         uninstallMenu?.();
         darkQuery.removeEventListener("change", applyTheme);
@@ -562,7 +599,13 @@ active.
         on:export={(e) => tools?.run("export", e.detail)}
         on:shared={openSharedDecks}
         on:import={() => tools?.run("import")}
-    />
+    >
+        <UpdateNotice
+            slot="notice"
+            controller={updates}
+            on:restart={restartForUpdate}
+        />
+    </DeckSidebar>
 
     <main>
         <div class="titlebar" data-tauri-drag-region>

@@ -22,6 +22,7 @@ pub mod rpc;
 pub mod scheme;
 pub mod settings;
 pub mod sync;
+pub mod updater;
 
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
@@ -66,6 +67,8 @@ pub struct AppState {
     quitting: AtomicBool,
     /// True under `--serve`: test-only commands such as seeding are allowed.
     serve_mode: AtomicBool,
+    /// The release an update check found; see updater.rs.
+    pending_update: Mutex<Option<updater::PendingUpdate>>,
 }
 
 impl AppState {
@@ -81,6 +84,7 @@ impl AppState {
             main_thread: std::thread::current().id(),
             quitting: AtomicBool::new(false),
             serve_mode: AtomicBool::new(false),
+            pending_update: Mutex::new(None),
         }
     }
 
@@ -102,6 +106,14 @@ impl AppState {
         self.quitting.store(true, Ordering::SeqCst);
         if let Some(app) = self.app_handle() {
             app.exit(0);
+        }
+    }
+
+    /// `quit`, relaunching once the backup has run and the collection closed.
+    fn restart(&self) {
+        self.quitting.store(true, Ordering::SeqCst);
+        if let Some(app) = self.app_handle() {
+            app.request_restart();
         }
     }
 
@@ -273,6 +285,7 @@ fn run_window(options: Options) {
     use tauri::Manager;
 
     let app = tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .register_asynchronous_uri_scheme_protocol("anki", scheme::handle_async)
         .setup(move |app| {
             // The bundle's resource folder is only resolvable once the app

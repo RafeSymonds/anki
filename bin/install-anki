@@ -1,13 +1,18 @@
 #!/usr/bin/env bash
-# Install this fork's Anki desktop app from its latest GitHub release.
+# Install or update this fork's Anki desktop app from its latest GitHub release.
 #
 #   bin/install-anki [--version X.Y.Z | --dmg PATH] [--dir DIR]
-#                    [--app-name NAME] [--replace]
+#                    [--app-name NAME] [--replace] [--update]
 #
-# Downloads the release .dmg, checks it against the published SHA256, copies
+# Downloads the release, checks it against the published SHA256, copies
 # Anki.app into /Applications and clears the quarantine flag macOS puts on
-# downloads, so the app opens on the first try. Also usable straight from the
-# web:
+# downloads, so the app opens on the first try. A running copy is quit first
+# and reopened afterwards.
+#
+# --update works on the copy that is already installed, wherever it is, and
+# does nothing when that copy is already the latest version.
+#
+# Also usable straight from the web:
 #
 #   curl -fsSL https://raw.githubusercontent.com/RafeSymonds/anki/main/bin/install-anki | bash
 
@@ -20,13 +25,15 @@ APP_NAME="Anki"
 VERSION=""
 DMG_PATH=""
 REPLACE=0
+UPDATE=0
+DEST_GIVEN=0
 
 usage() {
     # $0 is not a file when the script is piped in from curl.
     if [[ -r "$0" ]]; then
-        sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'
+        sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'
     else
-        echo "install-anki [--version X.Y.Z | --dmg PATH] [--dir DIR] [--app-name NAME] [--replace]"
+        echo "install-anki [--version X.Y.Z | --dmg PATH] [--dir DIR] [--app-name NAME] [--replace] [--update]"
     fi
     exit "${1:-0}"
 }
@@ -35,15 +42,57 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --version) VERSION="${2:?--version needs a value}"; shift 2 ;;
         --dmg) DMG_PATH="${2:?--dmg needs a value}"; shift 2 ;;
-        --dir) DEST_DIR="${2:?--dir needs a value}"; shift 2 ;;
-        --app-name) APP_NAME="${2:?--app-name needs a value}"; shift 2 ;;
+        --dir) DEST_DIR="${2:?--dir needs a value}"; DEST_GIVEN=1; shift 2 ;;
+        --app-name) APP_NAME="${2:?--app-name needs a value}"; DEST_GIVEN=1; shift 2 ;;
         --replace) REPLACE=1; shift ;;
+        --update) UPDATE=1; shift ;;
         -h | --help) usage 0 ;;
         *) echo "unknown option: $1" >&2; usage 2 ;;
     esac
 done
 
 [[ "$(uname -s)" == "Darwin" ]] || { echo "this app is macOS only" >&2; exit 1; }
+
+plist_value() {
+    /usr/libexec/PlistBuddy -c "Print :$2" "$1/Contents/Info.plist" 2>/dev/null || true
+}
+
+is_running() {
+    pgrep -f "^$1/Contents/MacOS/" >/dev/null
+}
+
+# A quit event rather than a signal, so the app gets to back up and close the
+# collection. macOS may ask once for permission to control it, which is why
+# this waits a while and leaves the app alone if it never quits.
+quit_app() {
+    osascript -e "tell application \"$1\" to quit" >/dev/null 2>&1 &
+    local asking=$!
+    for _ in $(seq 1 600); do
+        if ! is_running "$1"; then
+            kill "$asking" 2>/dev/null || true
+            return 0
+        fi
+        sleep 0.1
+    done
+    kill "$asking" 2>/dev/null || true
+    echo "Anki did not quit. Close it and run this again." >&2
+    exit 1
+}
+
+if [[ $UPDATE -eq 1 && $DEST_GIVEN -eq 0 ]]; then
+    for candidate in \
+        "/Applications/Anki.app" \
+        "/Applications/Anki Desktop.app" \
+        "$HOME/Applications/Anki.app" \
+        "$HOME/Applications/Anki Desktop.app"; do
+        if [[ "$(plist_value "$candidate" CFBundleIdentifier)" == "$BUNDLE_ID" ]]; then
+            DEST_DIR="$(dirname "$candidate")"
+            APP_NAME="$(basename "$candidate" .app)"
+            break
+        fi
+    done
+fi
+DEST="$DEST_DIR/$APP_NAME.app"
 
 if [[ -n "$DMG_PATH" ]]; then
     [[ -f "$DMG_PATH" ]] || { echo "no such file: $DMG_PATH" >&2; exit 1; }
@@ -58,6 +107,13 @@ elif [[ -z "$VERSION" ]]; then
     }
 fi
 
+if [[ $UPDATE -eq 1 && -z "$DMG_PATH" ]] &&
+    [[ "$(plist_value "$DEST" CFBundleIdentifier)" == "$BUNDLE_ID" ]] &&
+    [[ "$(plist_value "$DEST" CFBundleShortVersionString)" == "$VERSION" ]]; then
+    echo "Anki $VERSION is already the latest version ($DEST)."
+    exit 0
+fi
+
 WORK="$(mktemp -d)"
 MOUNT="$WORK/mnt"
 cleanup() {
@@ -66,34 +122,51 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Download one file of the release into $WORK and check its published SHA256.
+fetch_checked() {
+    curl -fL# --output "$WORK/$1" "$BASE/$1"
+    if grep -q "  $1\$" "$WORK/SHA256SUMS.txt"; then
+        echo "==> checking sha256"
+        (cd "$WORK" && grep "  $1\$" SHA256SUMS.txt | shasum -a 256 -c -)
+    else
+        echo "warning: no checksum for $1 in the release; skipping it" >&2
+    fi
+}
+
+SOURCE=""
 if [[ -z "$DMG_PATH" ]]; then
-    DMG="Anki-$VERSION-macos-universal.dmg"
     BASE="https://github.com/$REPO/releases/download/v$VERSION"
-    DMG_PATH="$WORK/$DMG"
+    ARCHIVE="Anki-$VERSION-macos-universal.app.tar.gz"
+    curl -fsSL --output "$WORK/SHA256SUMS.txt" "$BASE/SHA256SUMS.txt" || : >"$WORK/SHA256SUMS.txt"
 
     echo "==> downloading Anki $VERSION"
-    curl -fL# --output "$DMG_PATH" "$BASE/$DMG"
-
-    if curl -fsSL --output "$WORK/SHA256SUMS.txt" "$BASE/SHA256SUMS.txt"; then
-        echo "==> checking sha256"
-        (cd "$WORK" && shasum -a 256 -c SHA256SUMS.txt)
+    # The archive the in-app updater uses needs no disk image mounted. Releases
+    # from before the updater only have the .dmg.
+    if grep -q "  $ARCHIVE\$" "$WORK/SHA256SUMS.txt"; then
+        fetch_checked "$ARCHIVE"
+        mkdir "$WORK/app"
+        tar -xzf "$WORK/$ARCHIVE" -C "$WORK/app"
+        SOURCE="$WORK/app/Anki.app"
     else
-        echo "warning: no SHA256SUMS.txt in the release; skipping the checksum" >&2
+        DMG="Anki-$VERSION-macos-universal.dmg"
+        fetch_checked "$DMG"
+        DMG_PATH="$WORK/$DMG"
     fi
 fi
 
-echo "==> mounting the disk image"
-mkdir -p "$MOUNT"
-hdiutil attach -readonly -nobrowse -mountpoint "$MOUNT" "$DMG_PATH" >/dev/null
-SOURCE="$MOUNT/Anki.app"
-[[ -d "$SOURCE" ]] || { echo "no Anki.app inside $DMG_PATH" >&2; exit 1; }
-VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$SOURCE/Contents/Info.plist")"
+if [[ -z "$SOURCE" ]]; then
+    echo "==> mounting the disk image"
+    mkdir -p "$MOUNT"
+    hdiutil attach -readonly -nobrowse -mountpoint "$MOUNT" "$DMG_PATH" >/dev/null
+    SOURCE="$MOUNT/Anki.app"
+fi
+[[ -d "$SOURCE" ]] || { echo "no Anki.app in the download" >&2; exit 1; }
+VERSION="$(plist_value "$SOURCE" CFBundleShortVersionString)"
 
-DEST="$DEST_DIR/$APP_NAME.app"
 if [[ -d "$DEST" && $REPLACE -eq 0 ]]; then
     # Don't quietly overwrite an official Anki install; it is a different app
     # that happens to want the same name.
-    existing="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$DEST/Contents/Info.plist" 2>/dev/null || true)"
+    existing="$(plist_value "$DEST" CFBundleIdentifier)"
     if [[ "$existing" != "$BUNDLE_ID" ]]; then
         echo "$DEST is a different app ($existing)." >&2
         echo "Pass --replace to overwrite it, or --app-name 'Anki Desktop' to install alongside it." >&2
@@ -107,6 +180,15 @@ echo "==> installing to $DEST"
 STAGE="$DEST_DIR/.$APP_NAME.app.incoming"
 rm -rf "$STAGE"
 ditto "$SOURCE" "$STAGE"
+
+# Only now, so the app stays usable through the download and the copy.
+WAS_RUNNING=0
+if [[ "$(plist_value "$DEST" CFBundleIdentifier)" == "$BUNDLE_ID" ]] && is_running "$DEST"; then
+    WAS_RUNNING=1
+    echo "==> quitting the running app"
+    quit_app "$DEST"
+fi
+
 rm -rf "$DEST"
 mv "$STAGE" "$DEST"
 
@@ -116,5 +198,10 @@ xattr -dr com.apple.quarantine "$DEST" 2>/dev/null || true
 
 echo
 echo "Installed Anki $VERSION to $DEST"
-echo "It opens the same collection as official Anki (~/Library/Application Support/Anki2)."
-echo "Start it with: open \"$DEST\""
+if [[ $WAS_RUNNING -eq 1 ]]; then
+    open "$DEST"
+    echo "Reopened it."
+else
+    echo "It opens the same collection as official Anki (~/Library/Application Support/Anki2)."
+    echo "Start it with: open \"$DEST\""
+fi

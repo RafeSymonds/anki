@@ -190,6 +190,7 @@ a deck of your own, a deck someone else made, or a file.
         {/each}
     </div>
     <div class="footer">
+        <slot name="notice" />
         <button class="get-shared" on:click={() => dispatch("shared")}>
             Get shared decks
         </button>

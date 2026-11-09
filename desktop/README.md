@@ -21,11 +21,13 @@ desktop/                     Rust crate `anki-desktop` (Tauri app + HTTP mode)
   src/menu.rs                native menu bar; choices run window.__ankiMenu(id) in the shell
   src/backup.rs              .colpkg backups into <profile>/backups (on quit, and Tools > Create Backup)
   src/recording.rs           stores editor recordings (/_desktop/saveRecording/{name}) for addMediaFromPath
+  src/updater.rs             in-app updates from the newest GitHub release (see Updates)
   Info.plist                 microphone usage description; merged into the bundle and embedded in the dev binary
   web/card.html              the document cards render in (loads js/reviewer.js)
   tests/backend.rs           integration tests against a temporary collection
   tests/simulation.rs        seeded random operation sequences with invariants (ANKI_SIM_SEED/STEPS)
   tests/sync.rs              close/reopen and the error-kind header, against a temporary collection
+  tests/updater.rs           the update commands with no app around them
   examples/seed.rs           `cargo run -p anki-desktop --example seed -- <profile dir>`
 ts/lib/desktop/              the Svelte app shell (mounted by ts/routes/+page.svelte)
   App.svelte                 shell: sidebar + screens (overview, review, add, embedded page)
@@ -40,6 +42,7 @@ ts/lib/desktop/              the Svelte app shell (mounted by ts/routes/+page.sv
   bridge.ts                  bridgeCommand/pycmd plumbing
   rpc-events.ts              "a backend call ran" notifications (stand-in for operation_did_execute)
   desktop-api.ts             calls to /_desktop/* (native side)
+  updates.ts, UpdateNotice.svelte   the update flow and the sidebar's offer
   sync/                      AnkiWeb sync: sync.ts (port of qt/aqt/sync.py), sync-rpc.ts, SyncPanel.svelte, LoginSheet.svelte
   decks.ts, card-html.ts, audio.ts, shortcuts.ts   pure logic with vitest tests next to them
   notetypes/                 note type list, Fields dialog and card layout (models.py, fields.py, clayout.py)
@@ -238,6 +241,35 @@ timer. It saves through `updateDeckConfigs` and `setPreferences`, the same
 calls Deck Options uses, and `study-settings.ts` holds the presets and the
 sentences that describe each choice.
 
+**Updates.** Running copies read `latest.json` from
+`/releases/latest/download/` on GitHub (`plugins.updater` in tauri.conf.json),
+through `tauri-plugin-updater`'s Rust API; there is no JavaScript side and no
+capability. `updates.ts` drives three `/_desktop` commands: `checkForUpdate`
+at launch, every six hours and from Anki > Check for Updates…; `downloadUpdate`
+when Update is pressed, which holds the verified archive in memory; and
+`restartToUpdate` when Restart to update is pressed, after the same sync
+`beforeQuit` runs. That last one replaces the bundle, then
+`AppHandle::request_restart` fires `RunEvent::Exit`, so the backup and the
+collection close happen before the relaunch; if the install fails the app keeps
+running and says why. `updater.rs` answers `unsupported` under `--serve`, for a
+bare binary, and for a bundle on a disk image or translocated by macOS, where
+the shell shows nothing until the menu item is used. `updates.spec.ts` stubs
+the host's answers because `--serve` has no bundle to replace.
+
+To try the real swap, build two signed versions with a `--config` override
+that sets `version`, `bundle.createUpdaterArtifacts: true`, and
+`plugins.updater.endpoints` plus `dangerousInsecureTransportProtocol: true`
+for a `http://127.0.0.1` server holding `latest.json` and the archive. Run the
+older bundle's binary with `--base <scratch folder>`, because a relaunch keeps
+its arguments and environment and the default is the real collection.
+
+`bin/anki update` (`bin/install-anki --update`) is the terminal route, and also
+works on a copy with no updater. It downloads the same archive and checks it
+against `SHA256SUMS.txt` rather than the signature, so nothing has to be mounted;
+a release with no archive falls back to its .dmg. It asks a running app to quit
+with an Apple event, which runs the same exit work but not the sync on quit.
+Symlink `bin/anki` onto PATH to run `anki update` from anywhere.
+
 ## Commands
 
 ```
@@ -249,6 +281,7 @@ bin/anki sveltekit            rebuild only the SvelteKit app (the shell) without
 bin/anki e2e-quick [port] [spec]   e2e without rebuilding assets (pair with `bin/anki sveltekit`)
 bin/anki package [--universal]    self-contained Anki.app and .dmg in target/release/bundle
 bin/anki release <version>    build and publish that version on GitHub
+bin/anki update               install the newest GitHub release over the installed app
 bin/anki bench                cold start and backend round-trip latency
 bin/anki worktree-init        prepare a git worktree to build and test on its own
 just web                      build the web assets the app serves
@@ -292,6 +325,15 @@ the wrong version. The release gets `Anki-<version>-macos-universal.dmg` and
 `SHA256SUMS.txt`, with `docs/desktop-install.md` as the notes plus a compare
 link to the previous `v*` tag. `bin/anki package --universal` builds the same
 bundle locally.
+
+The run also signs `Anki-<version>-macos-universal.app.tar.gz` and writes
+`latest.json` for the in-app updater (see Updates). That needs the repository
+secret `TAURI_SIGNING_PRIVATE_KEY`, the contents of
+`~/.tauri/anki-updater.key`, and a run without it stops at its first step. The
+matching public key is `plugins.updater.pubkey` in tauri.conf.json. Keep the
+private key backed up: without it no installed copy will accept another
+update, and each has to be moved to a new key once with `bin/anki update`.
+Drafts and prereleases are not offered, because `/releases/latest` skips them.
 
 There is no Apple developer certificate, so the app is only ad-hoc signed
 (`APPLE_SIGNING_IDENTITY=-`) and macOS blocks the first launch until the
