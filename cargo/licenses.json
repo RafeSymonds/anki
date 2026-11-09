@@ -472,6 +472,14 @@
     "repository": "https://github.com/servo/rust-cssparser"
   },
   {
+    "authors": "Simon Sapin <simon.sapin@exyr.org>",
+    "description": "Procedural macros for cssparser",
+    "license": "MPL-2.0",
+    "license_file": null,
+    "name": "cssparser-macros",
+    "repository": "https://github.com/servo/rust-cssparser"
+  },
+  {
     "authors": "Andrew Gallant <jamslam@gmail.com>",
     "description": "Fast CSV parsing with support for serde.",
     "license": "MIT OR Unlicense",

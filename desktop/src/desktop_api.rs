@@ -107,6 +107,12 @@ pub fn handle(state: &AppState, cmd: &str, body: &[u8]) -> Reply {
             state.quit();
             json(Value::Null)
         }
+        // Updating from the newest GitHub release; see updater.rs.
+        "checkForUpdate" => result(crate::updater::check(state)),
+        "downloadUpdate" => result(crate::updater::download(state).map(|_| Value::Null)),
+        "restartToUpdate" => {
+            result(crate::updater::install_and_restart(state).map(|_| Value::Null))
+        }
         "profiles" => json(crate::profile::profiles_json(state)),
         "downloadedDecks" => json(crate::downloads::downloaded_decks_json()),
         "switchProfile" => {

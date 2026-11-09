@@ -6,9 +6,9 @@ macOS 13 or later, Apple Silicon or Intel. One command:
 curl -fsSL https://raw.githubusercontent.com/RafeSymonds/anki/main/bin/install-anki | bash
 ```
 
-That downloads the disk image below, checks it against `SHA256SUMS.txt`,
-copies the app to `/Applications` and clears the quarantine flag so it opens
-on the first try. Add `--app-name "Anki Desktop"` to install it next to an
+That downloads the app from this release, checks it against `SHA256SUMS.txt`,
+copies it to `/Applications` and clears the quarantine flag so it opens on the
+first try. Add `--app-name "Anki Desktop"` to install it next to an
 existing Anki instead of over it.
 
 By hand:
@@ -37,8 +37,21 @@ Add-ons are not supported.
 
 ## Updating
 
-Run the install command again; it replaces the app in place and leaves your
-collection alone.
+The app checks for a new release when it starts and every few hours while it
+runs. When there is one, the sidebar offers **Update**; the app stays usable
+while it downloads, and **Restart to update** finishes it. **Anki › Check for
+Updates…** checks right away.
+
+From a terminal, add `--update` to the install command, or run `bin/anki
+update` in a checkout. It quits the running app, replaces it and reopens it,
+and does nothing if you already have the latest version:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/RafeSymonds/anki/main/bin/install-anki | bash -s -- --update
+```
+
+Either way your collection is left alone. Version 0.1.0 has no updater, so
+leave it with the terminal command.
 
 ## Uninstalling
 

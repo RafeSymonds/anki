@@ -43,6 +43,11 @@ env:
   # cleared. Without it the bundle keeps only the linker's signature, and its
   # Info.plist and resources are unsealed.
   APPLE_SIGNING_IDENTITY: "-"
+  # Signs the archive the in-app updater downloads; the app only accepts one
+  # that verifies against plugins.updater.pubkey in tauri.conf.json. The key
+  # has no password, which makes the second variable empty.
+  TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+  TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
 jobs:
   build:
@@ -53,6 +58,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 #v4
         with:
           submodules: true
+
+      - name: Check the updater signing key is set
+        run: |
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "::error::the TAURI_SIGNING_PRIVATE_KEY secret is not set; see Releasing in desktop/README.md"
+            exit 1
+          fi
 
       - name: Resolve version
         id: meta
@@ -69,12 +81,15 @@ jobs:
             echo "tag=v$version"
             echo "prerelease=$prerelease"
             echo "dmg=Anki-$version-macos-universal.dmg"
+            echo "updater=Anki-$version-macos-universal.app.tar.gz"
           } >> "$GITHUB_OUTPUT"
         env:
           INPUT_VERSION: ${{ inputs.version }}
 
       # desktop/tauri.conf.json carries a placeholder version for dev builds;
-      # the released bundle gets its version from the tag/input instead.
+      # the released bundle gets its version from the tag/input instead. The
+      # updater archive is only asked for here, because making one needs the
+      # signing key, which a local `bin/anki package` does not have.
       - name: Stamp the version into the bundle config
         run: |
           python3 - <<'PY'
@@ -83,6 +98,7 @@ jobs:
           path = pathlib.Path("desktop/tauri.conf.json")
           conf = json.loads(path.read_text())
           conf["version"] = os.environ["VERSION"]
+          conf["bundle"]["createUpdaterArtifacts"] = True
           path.write_text(json.dumps(conf, indent=4) + "\n")
           PY
         env:
@@ -177,6 +193,41 @@ jobs:
           VERSION: ${{ steps.meta.outputs.version }}
           DMG_NAME: ${{ steps.meta.outputs.dmg }}
 
+      # What running copies of the app read: latest.json at the newest release
+      # points at the signed archive. /releases/latest skips drafts and
+      # prereleases, so those never reach anyone's update check.
+      - name: Collect the updater archive and write latest.json
+        run: |
+          bundle=target/universal-apple-darwin/release/bundle/macos
+          test -s "$bundle/Anki.app.tar.gz" || { echo "::error::no updater archive was produced"; exit 1; }
+          test -s "$bundle/Anki.app.tar.gz.sig" || { echo "::error::the updater archive was not signed"; exit 1; }
+          tar -tzf "$bundle/Anki.app.tar.gz" | grep -q '^Anki.app/Contents/Info.plist$' || {
+            echo "::error::the updater archive does not hold Anki.app"
+            exit 1
+          }
+          cp "$bundle/Anki.app.tar.gz" "out/release/$UPDATER_NAME"
+          # bin/install-anki downloads this archive too, and checks it here.
+          (cd out/release && shasum -a 256 "$UPDATER_NAME" | tee -a SHA256SUMS.txt)
+          python3 - "$bundle/Anki.app.tar.gz.sig" <<'PY'
+          import datetime, json, os, pathlib, sys
+
+          entry = {
+              "signature": pathlib.Path(sys.argv[1]).read_text().strip(),
+              "url": "https://github.com/{GITHUB_REPOSITORY}/releases/download/{TAG}/{UPDATER_NAME}".format(**os.environ),
+          }
+          latest = {
+              "version": os.environ["VERSION"],
+              "pub_date": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+              # One universal bundle serves both architectures.
+              "platforms": {"darwin-aarch64": entry, "darwin-x86_64": entry},
+          }
+          pathlib.Path("out/release/latest.json").write_text(json.dumps(latest, indent=2) + "\n")
+          PY
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          UPDATER_NAME: ${{ steps.meta.outputs.updater }}
+
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a #v7.0.1
         with:
           name: anki-desktop-macos
@@ -204,11 +255,15 @@ jobs:
         if: github.event_name == 'push' || inputs.publish == true
         run: |
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" out/release/"$DMG_NAME" out/release/SHA256SUMS.txt --clobber
+            gh release upload "$TAG" \
+              out/release/"$DMG_NAME" out/release/SHA256SUMS.txt \
+              out/release/"$UPDATER_NAME" out/release/latest.json \
+              --clobber
             gh release edit "$TAG" --title "Anki $VERSION" --notes-file out/release/notes.md
           else
             gh release create "$TAG" \
               out/release/"$DMG_NAME" out/release/SHA256SUMS.txt \
+              out/release/"$UPDATER_NAME" out/release/latest.json \
               --target "$GITHUB_SHA" \
               --title "Anki $VERSION" \
               --notes-file out/release/notes.md \
@@ -221,6 +276,7 @@ jobs:
           TAG: ${{ steps.meta.outputs.tag }}
           VERSION: ${{ steps.meta.outputs.version }}
           DMG_NAME: ${{ steps.meta.outputs.dmg }}
+          UPDATER_NAME: ${{ steps.meta.outputs.updater }}
           DRAFT: ${{ inputs.draft == true && '1' || '' }}
           PRERELEASE: ${{ steps.meta.outputs.prerelease == 'true' && '1' || '' }}
 

@@ -4,6 +4,7 @@
 /** Calls into the host's native side (desktop/src/desktop_api.rs). */
 
 import type { DownloadedDeck } from "./shared-decks";
+import type { UpdateCheck } from "./updates";
 
 export type SettingsScope = "profile" | "meta";
 
@@ -106,6 +107,22 @@ export async function importCollectionPackage(path: string): Promise<void> {
 /** Tell the host the shell is done; the app exits, backs up and closes the collection. */
 export async function quitApp(): Promise<void> {
     await post("quit", "");
+}
+
+/** Ask the host whether GitHub has a newer release (desktop/src/updater.rs). */
+export async function checkForUpdate(): Promise<UpdateCheck> {
+    const response = await post("checkForUpdate", "");
+    return (await response.json()) as UpdateCheck;
+}
+
+/** Fetch and verify the release `checkForUpdate` found. */
+export async function downloadUpdate(): Promise<void> {
+    await post("downloadUpdate", "");
+}
+
+/** Replace the app with the downloaded release; the host backs up, closes the collection and relaunches. */
+export async function restartToUpdate(): Promise<void> {
+    await post("restartToUpdate", "");
 }
 
 export interface ProfileList {
