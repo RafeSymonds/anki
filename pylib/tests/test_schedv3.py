@@ -77,7 +77,7 @@ def test_new():
     #     col.sched.answerCard(c, 2)
 
 
-def test_newLimits():
+def test_new_limits_are_not_applied():
     col = getEmptyCol()
     # add some notes
     deck2 = col.decks.id("Default::foo")
@@ -92,21 +92,20 @@ def test_newLimits():
     # give the child deck a different configuration
     c2 = col.decks.add_config_returning_id("new conf")
     col.decks.set_config_id_for_deck_dict(col.decks.get(deck2), c2)
-    # both confs have defaulted to a limit of 20
-    assert col.sched.newCount == 20
+    # both confs default to a stored limit of 20, which is not applied
+    assert col.sched.newCount == 30
     # first card we get comes from parent
     c = col.sched.getCard()
     assert c.did == 1
-    # limit the parent to 10 cards, meaning we get 10 in total
+    # lower stored limits on the parent and child change nothing
     conf1 = col.decks.config_dict_for_deck_id(1)
     conf1["new"]["perDay"] = 10
     col.decks.save(conf1)
-    assert col.sched.newCount == 10
-    # if we limit child to 4, we should get 9
+    assert col.sched.newCount == 30
     conf2 = col.decks.config_dict_for_deck_id(deck2)
     conf2["new"]["perDay"] = 4
     col.decks.save(conf2)
-    assert col.sched.newCount == 9
+    assert col.sched.newCount == 30
 
 
 def test_newBoxes():
@@ -425,27 +424,27 @@ def review_limits_setup() -> tuple[anki.collection.Collection, dict]:
     return col, child
 
 
-def test_review_limits():
+def test_review_limits_are_not_applied():
     col, child = review_limits_setup()
 
     tree = col.sched.deck_due_tree().children
-    # (('parent', 1514457677462, 5, 0, 0, (('child', 1514457677463, 5, 0, 0, ()),)))
-    assert tree[0].review_count == 5  # parent
-    assert tree[0].children[0].review_count == 10  # child
+    # stored limits of 5 and 10 hold back none of the 20 due cards
+    assert tree[0].review_count == 20  # parent
+    assert tree[0].children[0].review_count == 20  # child
 
     # .counts() should match
     col.decks.select(child["id"])
     col.sched.reset()
-    assert col.sched.counts() == (0, 0, 10)
+    assert col.sched.counts() == (0, 0, 20)
 
     # answering a card in the child should decrement parent count
     c = col.sched.getCard()
     col.sched.answerCard(c, 3)
-    assert col.sched.counts() == (0, 0, 9)
+    assert col.sched.counts() == (0, 0, 19)
 
     tree = col.sched.deck_due_tree().children
-    assert tree[0].review_count == 4  # parent
-    assert tree[0].children[0].review_count == 9  # child
+    assert tree[0].review_count == 19  # parent
+    assert tree[0].children[0].review_count == 19  # child
 
 
 def test_button_spacing():

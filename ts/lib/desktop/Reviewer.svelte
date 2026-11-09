@@ -40,6 +40,7 @@ Edit, Undo and the card actions menu.
     const currentCard = controller.currentCard;
     const autoAdvance = controller.autoAdvance;
     const timeboxHit = controller.timeboxHit;
+    const practiceRound = controller.practiceRound;
 
     let frame: CardFrame;
     let editor: EditorPanel | undefined;
@@ -81,8 +82,12 @@ Edit, Undo and the card actions menu.
         .catch(() => (showGuide = false));
     let guideRequested = false;
     $: guideVisible =
-        (showGuide || guideRequested) && $state === "answer" && $buttons.length > 0;
-    $: if (showGuide && $state === "transition") {
+        (showGuide || guideRequested) &&
+        $state === "answer" &&
+        $buttons.length > 0 &&
+        $practiceRound === null;
+    // The guide explains scheduled answers, so practice neither shows nor uses it up.
+    $: if (showGuide && $state === "transition" && $practiceRound === null) {
         dismissGuide();
     }
     function dismissGuide(): void {
@@ -269,6 +274,11 @@ Edit, Undo and the card actions menu.
     >
         <span class="progress-fill" style="width: {donePercent}%"></span>
     </div>
+    {#if $practiceRound !== null}
+        <p class="practice-note">
+            Practice, round {$practiceRound}. Due dates stay as they are.
+        </p>
+    {/if}
     <div class="card-area" class:split={editing}>
         <div class="card-pane" class:cut-above={cutAbove} class:cut-below={cutBelow}>
             <CardFrame
@@ -326,7 +336,7 @@ Edit, Undo and the card actions menu.
                     on:click={() => controller.showAnswer()}
                 >
                     {tr.studyingShowAnswer()}
-                    {#if $showCounts && $counts}
+                    {#if $showCounts && $counts && $practiceRound === null}
                         <span class="counts">
                             <span class="new-count" class:current={$counts.idx === 0}>
                                 {$counts.counts[0]}
@@ -360,15 +370,17 @@ Edit, Undo and the card actions menu.
                         <span class="label">{button.label}</span>
                     </button>
                 {/each}
-                <button
-                    class="explain"
-                    aria-label="What do these buttons mean?"
-                    title="What do these buttons mean?"
-                    aria-expanded={guideVisible}
-                    on:click={toggleGuide}
-                >
-                    ?
-                </button>
+                {#if $practiceRound === null}
+                    <button
+                        class="explain"
+                        aria-label="What do these buttons mean?"
+                        title="What do these buttons mean?"
+                        aria-expanded={guideVisible}
+                        on:click={toggleGuide}
+                    >
+                        ?
+                    </button>
+                {/if}
             {:else if $state === "transition"}
                 <span class="fg-subtle">…</span>
             {/if}
@@ -378,7 +390,9 @@ Edit, Undo and the card actions menu.
             {#if $counts}
                 <span
                     class="remaining"
-                    title="New, learning and review cards still due today"
+                    title={$practiceRound === null
+                        ? "New, learning and review cards still due today"
+                        : "Cards left in this round"}
                 >
                     {remainingText($counts)}
                 </span>
@@ -530,6 +544,13 @@ Edit, Undo and the card actions menu.
         .progress-fill {
             transition: none;
         }
+    }
+    .practice-note {
+        flex: none;
+        margin: 0 24px 12px;
+        font-size: 13px;
+        color: var(--fg-subtle);
+        text-align: center;
     }
     .card-area {
         flex: 1;

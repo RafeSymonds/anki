@@ -5,7 +5,7 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 The deck overview: what is waiting today, one button to start, and a plain
 account of how this deck is scheduled with the settings behind it. When
 nothing is left it shows the congratulations page instead, with routes to
-more cards and to the settings that decide how much comes back tomorrow.
+practice and to more cards.
 -->
 <script lang="ts">
     import type { DeckConfig_Config } from "@generated/anki/deck_config_pb";
@@ -15,32 +15,23 @@ more cards and to the settings that decide how much comes back tomorrow.
     import { UnburyDeckRequest_Mode } from "@generated/anki/scheduler_pb";
     import {
         congratsInfo,
-        customStudyDefaults,
         emptyFilteredDeck,
-        extendLimits,
         getAllConfig,
         getDeck,
         getDeckConfig,
         getQueuedCards,
         rebuildFilteredDeck,
         renderMarkdown,
-        schedTimingToday,
         unburyDeck,
     } from "@generated/backend";
     import * as tr from "@generated/ftl";
     import { createEventDispatcher, onDestroy, onMount } from "svelte";
 
     import CongratsPage from "../../routes/congrats/CongratsPage.svelte";
-    import {
-        newCardsConsequence,
-        reviewLimitConsequence,
-    } from "../../routes/deck-options/consequences";
     import { installBridgeHandler, removeBridgeHandler } from "./bridge";
     import { findNode, isFreshCollection } from "./decks";
     import EmptyState from "./EmptyState.svelte";
-    import type { LimitNotice } from "./limits";
-    import { effectiveLimits, limitNotices } from "./limits";
-    import { estimatedMinutes, retentionSummary } from "./study-settings";
+    import { retentionSummary } from "./study-settings";
 
     export let deckId: bigint;
     export let tree: DeckTreeNode | null;
@@ -53,6 +44,7 @@ more cards and to the settings that decide how much comes back tomorrow.
         studySettings: bigint;
         changed: void;
         customStudy: void;
+        practice: void;
         add: void;
         import: void;
         shared: void;
@@ -88,13 +80,12 @@ more cards and to the settings that decide how much comes back tomorrow.
     let info: CongratsInfoResponse | null = null;
     let description = "";
     let loading = true;
-    let notices: LimitNotice[] = [];
     let config: DeckConfig_Config | null = null;
     let fsrs = false;
-    let limits = { newPerDay: 20, reviewsPerDay: 200 };
     $: fresh = tree !== null && isFreshCollection(tree);
     $: total = counts[0] + counts[1] + counts[2];
     $: filtered = deck?.kind.case === "filtered";
+    $: canPractice = !filtered && (node?.totalIncludingChildren ?? 0) > 0;
 
     async function load(id: bigint, root: DeckTreeNode | null): Promise<void> {
         // Only the first load shows a placeholder; a refresh keeps the
@@ -110,12 +101,11 @@ more cards and to the settings that decide how much comes back tomorrow.
         finished = queued.cards.length === 0;
         info = finished ? await congratsInfo({}) : null;
         await loadSettings(deck);
-        notices = info ? await loadNotices(deck, info) : [];
         description = await describe(deck);
         loading = false;
     }
 
-    /** The deck's limits and algorithm, for the panel that explains them. */
+    /** The deck's algorithm, for the panel that explains it. */
     async function loadSettings(deck: Deck): Promise<void> {
         if (deck.kind.case !== "normal") {
             config = null;
@@ -124,8 +114,6 @@ more cards and to the settings that decide how much comes back tomorrow.
         config =
             (await getDeckConfig({ dcid: deck.kind.value.configId })).config ?? null;
         fsrs = await fsrsEnabled();
-        const timing = await schedTimingToday({});
-        limits = effectiveLimits(deck, config, timing.daysElapsed);
     }
 
     /** Whether the collection schedules with FSRS; it is a collection-level
@@ -141,40 +129,6 @@ more cards and to the settings that decide how much comes back tomorrow.
         } catch {
             return false;
         }
-    }
-
-    /** The numbers behind "the daily limit has been reached". */
-    async function loadNotices(
-        deck: Deck,
-        info: CongratsInfoResponse,
-    ): Promise<LimitNotice[]> {
-        if (!info.newRemaining && !info.reviewRemaining) {
-            return [];
-        }
-        const defaults = await customStudyDefaults({ deckId: deck.id });
-        return limitNotices(info, defaults, limits);
-    }
-
-    /** One click more for today, through the same call custom study uses. */
-    async function extend(notice: LimitNotice): Promise<void> {
-        await extendLimits({
-            deckId,
-            newDelta: notice.kind === "new" ? notice.step : 0,
-            reviewDelta: notice.kind === "review" ? notice.step : 0,
-        });
-        dispatch("changed");
-    }
-
-    function noticeText(notice: LimitNotice): string {
-        return notice.kind === "new"
-            ? `Today's limit of ${notice.limit} new cards is done. ${notice.waiting} more new cards are waiting.`
-            : `Today's limit of ${notice.limit} reviews is done. ${notice.waiting} more cards are due.`;
-    }
-
-    function extendLabel(notice: LimitNotice): string {
-        return notice.kind === "new"
-            ? `Study ${notice.step} more new cards today`
-            : `Review ${notice.step} more cards today`;
     }
 
     async function describe(deck: Deck): Promise<string> {
@@ -255,16 +209,6 @@ more cards and to the settings that decide how much comes back tomorrow.
                     refreshPeriodically={true}
                     showCustomStudy={false}
                 />
-                {#each notices as notice (notice.kind)}
-                    <div class="limit-notice">
-                        <p>{noticeText(notice)}</p>
-                        {#if notice.step > 0}
-                            <button class="primary" on:click={() => extend(notice)}>
-                                {extendLabel(notice)}
-                            </button>
-                        {/if}
-                    </div>
-                {/each}
                 <div class="actions">
                     <button on:click={() => dispatch("options", deckId)}>
                         {tr.actionsOptions()}
@@ -282,6 +226,18 @@ more cards and to the settings that decide how much comes back tomorrow.
             <div class="card next">
                 <h2>While you wait for tomorrow</h2>
                 <div class="next-choices">
+                    {#if canPractice}
+                        <button
+                            class="next-choice"
+                            on:click={() => dispatch("practice")}
+                        >
+                            <span class="label">Practice all cards</span>
+                            <span class="hint">
+                                Go over them as often as you like. Due dates stay as
+                                they are.
+                            </span>
+                        </button>
+                    {/if}
                     <button class="next-choice" on:click={() => dispatch("add")}>
                         <span class="label">Make more cards</span>
                         <span class="hint">Add to this deck yourself.</span>
@@ -363,25 +319,6 @@ more cards and to the settings that decide how much comes back tomorrow.
                     <ul class="settings">
                         <li>
                             <span class="setting">
-                                {limits.newPerDay} new cards a day
-                            </span>
-                            <span class="because">
-                                {newCardsConsequence(limits.newPerDay)}
-                            </span>
-                        </li>
-                        <li>
-                            <span class="setting">
-                                Up to {limits.reviewsPerDay} reviews a day
-                            </span>
-                            <span class="because">
-                                {reviewLimitConsequence(
-                                    limits.reviewsPerDay,
-                                    limits.newPerDay,
-                                )}
-                            </span>
-                        </li>
-                        <li>
-                            <span class="setting">
                                 {#if fsrs}
                                     Aiming to remember {Math.round(
                                         (config?.desiredRetention || 0.9) * 100,
@@ -400,10 +337,6 @@ more cards and to the settings that decide how much comes back tomorrow.
                             </span>
                         </li>
                     </ul>
-                    <p class="estimate">
-                        At this rate, studying takes about {estimatedMinutes(limits)} minutes
-                        a day once your reviews build up.
-                    </p>
                     <div class="actions">
                         <button
                             class="primary quiet"
@@ -411,6 +344,14 @@ more cards and to the settings that decide how much comes back tomorrow.
                         >
                             Adjust studying
                         </button>
+                        {#if canPractice}
+                            <button
+                                title="Go over every card as often as you like. Due dates stay as they are."
+                                on:click={() => dispatch("practice")}
+                            >
+                                Practice all cards
+                            </button>
+                        {/if}
                         <button
                             title={tr.actionsShortcutKey({ val: "O" })}
                             on:click={() => dispatch("options", deckId)}
@@ -581,10 +522,6 @@ more cards and to the settings that decide how much comes back tomorrow.
         color: var(--fg-subtle);
         text-align: center;
     }
-    .explain .estimate {
-        text-align: start;
-        margin-top: 14px;
-    }
     .plain {
         margin: 0 0 14px;
         line-height: 1.55;
@@ -674,19 +611,6 @@ more cards and to the settings that decide how much comes back tomorrow.
     }
     .congrats :global(a) {
         color: var(--fg-link);
-    }
-    .limit-notice {
-        margin: 12px 0 0;
-        padding: 14px 16px;
-        border-radius: var(--app-radius);
-        background: var(--app-accent-soft);
-    }
-    .limit-notice p {
-        margin: 0 0 10px;
-    }
-    .limit-notice button.primary {
-        font-size: 14px;
-        padding: 8px 16px;
     }
     .next-choices {
         display: grid;

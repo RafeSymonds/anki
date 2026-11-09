@@ -22,6 +22,7 @@ import {
     buildCardAnswer,
     countsForQueue,
     currentDeckId,
+    practiceButtons,
     questionTimeoutStep,
     ratingFromEase,
     remainingText,
@@ -56,6 +57,12 @@ describe("ratings", () => {
         const s = states();
         expect(stateForEase(s, 1)).toBe(s.again);
         expect(stateForEase(s, 4)).toBe(s.easy);
+    });
+});
+
+describe("practiceButtons", () => {
+    it("offers Again and Good, on the keys they have when studying", () => {
+        expect(practiceButtons().map((button) => button.ease)).toEqual([1, 3]);
     });
 });
 

@@ -3,79 +3,10 @@
 
 /**
  * The study settings a person actually wants to change, in their words: how
- * much work a day, how hard to hold on to what they learn, how soon a new
- * card comes back, and how long a sitting lasts. Deck Options still has
- * every knob; this is the handful that change how studying feels, with the
- * consequence of each spelled out.
+ * hard to hold on to what they learn, how soon a new card comes back, and how
+ * long a sitting lasts. Deck Options still has every knob; this is the handful
+ * that change how studying feels, with the consequence of each spelled out.
  */
-
-import { reviewsAfterMonth } from "../../routes/deck-options/consequences";
-
-export interface StudyPlan {
-    newPerDay: number;
-    reviewsPerDay: number;
-}
-
-export type StudyStyleId = "gentle" | "steady" | "fast";
-
-export interface StudyStyle {
-    id: StudyStyleId;
-    label: string;
-    /** What choosing it means, in one line. */
-    hint: string;
-    plan: StudyPlan;
-}
-
-/**
- * Three workloads, from a few minutes a day to an hour. The review limits
- * leave room for the reviews the new cards will generate (five a day for
- * each new card a day, a month in).
- */
-export const STUDY_STYLES: StudyStyle[] = [
-    {
-        id: "gentle",
-        label: "Gentle",
-        hint: "5 new cards a day, about 5 minutes",
-        plan: { newPerDay: 5, reviewsPerDay: 50 },
-    },
-    {
-        id: "steady",
-        label: "Steady",
-        hint: "20 new cards a day, about 20 minutes",
-        plan: { newPerDay: 20, reviewsPerDay: 200 },
-    },
-    {
-        id: "fast",
-        label: "Fast",
-        hint: "40 new cards a day, about 40 minutes",
-        plan: { newPerDay: 40, reviewsPerDay: 400 },
-    },
-];
-
-/** Which of the three the deck currently matches, if any. */
-export function styleMatching(plan: StudyPlan): StudyStyleId | null {
-    return (
-        STUDY_STYLES.find(
-            (style) =>
-                style.plan.newPerDay === plan.newPerDay
-                && style.plan.reviewsPerDay === plan.reviewsPerDay,
-        )?.id ?? null
-    );
-}
-
-/** Minutes a day this plan costs, at ten seconds a card once it settles. */
-export function estimatedMinutes(plan: StudyPlan): number {
-    const reviews = Math.min(reviewsAfterMonth(plan.newPerDay), plan.reviewsPerDay);
-    const cards = plan.newPerDay + reviews;
-    return Math.max(1, Math.round((cards * 10) / 60));
-}
-
-export function workloadSummary(plan: StudyPlan): string {
-    if (plan.newPerDay <= 0) {
-        return "No new cards; you only review what you already learned.";
-    }
-    return `About ${estimatedMinutes(plan)} minutes a day once your reviews build up.`;
-}
 
 export type PaceId = "short" | "standard" | "spread";
 
@@ -185,12 +116,4 @@ export const SESSION_CHOICES = [0, 5, 10, 20, 30];
 
 export function sessionLabel(minutes: number): string {
     return minutes <= 0 ? "No limit" : `${minutes} min`;
-}
-
-/** Keep a typed number sane before it reaches the backend. */
-export function clampLimit(value: number, max = 9999): number {
-    if (!Number.isFinite(value)) {
-        return 0;
-    }
-    return Math.min(max, Math.max(0, Math.round(value)));
 }

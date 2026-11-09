@@ -25,7 +25,6 @@ the custom study deck is built.
         spinnerFor,
         textAfterSpinner,
         textBeforeSpinner,
-        titleText,
     } from "./custom-study";
     import Modal from "./Modal.svelte";
 
@@ -34,8 +33,8 @@ the custom study deck is built.
     const dispatch = createEventDispatcher<{ close: void; done: void }>();
 
     let defaults: CustomStudyDefaultsResponse | null = null;
-    let kind: CustomStudyKind = "new";
-    let spec: SpinnerSpec = { min: 1, max: 1, value: 1 };
+    let kind: CustomStudyKind = "forgot";
+    let spec: SpinnerSpec = spinnerFor(kind);
     let value = 1;
     let cramType: CramType = "new";
     let include: string[] = [];
@@ -45,10 +44,8 @@ the custom study deck is built.
 
     function choose(next: CustomStudyKind): void {
         kind = next;
-        if (defaults) {
-            spec = spinnerFor(kind, defaults);
-            value = spec.value;
-        }
+        spec = spinnerFor(kind);
+        value = spec.value;
     }
 
     function onValueChange(event: Event): void {
@@ -80,7 +77,6 @@ the custom study deck is built.
     onMount(async () => {
         defaults = await customStudyDefaults({ deckId });
         ({ include, exclude } = initialTagSelection(defaults.tags));
-        choose("new");
     });
 </script>
 
@@ -121,9 +117,6 @@ the custom study deck is built.
                 </label>
             {/each}
         </div>
-        {#if titleText(kind, defaults)}
-            <p class="title">{titleText(kind, defaults)}</p>
-        {/if}
         <div class="spinner-row">
             <span>{textBeforeSpinner(kind)}</span>
             <input
@@ -159,10 +152,6 @@ the custom study deck is built.
         flex-direction: column;
         gap: 6px;
         margin-bottom: 12px;
-    }
-    .title {
-        margin: 0 0 8px;
-        color: var(--fg-subtle);
     }
     .spinner-row {
         display: flex;

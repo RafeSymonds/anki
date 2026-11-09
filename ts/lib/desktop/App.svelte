@@ -44,6 +44,7 @@ active.
     import Reviewer from "./Reviewer.svelte";
     import SharedDecksScreen from "./SharedDecksScreen.svelte";
     import StudySettings from "./StudySettings.svelte";
+    import { practiceCardIds } from "./practice";
     import { ReviewerController } from "./reviewer";
     import { installRpcDoneHook, isOperation, onRpcDone } from "./rpc-events";
     import RecorderDialog from "./RecorderDialog.svelte";
@@ -161,6 +162,16 @@ active.
     }
 
     function startStudy(): void {
+        screen = { kind: "review" };
+    }
+
+    async function startPractice(): Promise<void> {
+        const cardIds = await practiceCardIds();
+        if (!cardIds.length) {
+            showToast("Every card in this deck is suspended.");
+            return;
+        }
+        controller.preparePractice(cardIds);
         screen = { kind: "review" };
     }
 
@@ -709,6 +720,7 @@ active.
                     {tree}
                     version={overviewVersion}
                     on:study={startStudy}
+                    on:practice={startPractice}
                     on:options={(e) => openDeckOptions(e.detail)}
                     on:changed={refreshDecks}
                     on:customStudy={() => tools?.run("customStudy")}

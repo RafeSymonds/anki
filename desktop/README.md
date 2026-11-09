@@ -30,8 +30,9 @@ desktop/                     Rust crate `anki-desktop` (Tauri app + HTTP mode)
 ts/lib/desktop/              the Svelte app shell (mounted by ts/routes/+page.svelte)
   App.svelte                 shell: sidebar + screens (overview, review, add, embedded page)
   DeckSidebar.svelte         deck tree
-  Overview.svelte            deck overview / congrats, daily-limit notices (limits.ts), first run (EmptyState.svelte)
+  Overview.svelte            deck overview / congrats, first run (EmptyState.svelte)
   Reviewer.svelte            study screen chrome; reviewer.ts is the logic (port of reviewer.py)
+  practice.ts                the endless loop behind Practice all cards
   CardFrame.svelte           iframe around desktop/web/card.html
   EditorPanel.svelte         iframe around the note editor route (/editor/?mode=add|current)
   EmbeddedPage.svelte        iframe around any other SvelteKit route (deck options, graphs, ...)
@@ -132,10 +133,10 @@ embeds it into the bare binary's `__info_plist` section for `bin/anki start`
 and the tests. The e2e spec stubs `getUserMedia` with a synthetic tone.
 
 **Deck options essentials.** In the Essentials view each essential setting
-carries one line of consequence (`ts/routes/deck-options/consequences.ts`: a
-rule-of-thumb review estimate, the review-limit check, forgotten cards per
-hundred) and the first sentence of its help inline; the Advanced view keeps
-the compact layout. The view flag travels by Svelte context.
+carries one line of consequence (`ts/routes/deck-options/consequences.ts`:
+forgotten cards per hundred) and the first sentence of its help inline; the
+Advanced view keeps the compact layout. The view flag travels by Svelte
+context.
 
 **Kind of card.** Above the Add editor, a picker offers Basic, Both
 directions and Fill in the blank (`notetype-kinds.ts` maps them to the stock
@@ -232,11 +233,23 @@ links into AnkiWeb by subject (`shared-decks.ts`), and lists the .apkg and
 **Study settings.** The overview explains how the deck is scheduled in
 plain words with its own numbers (`Overview.svelte` and
 `routes/deck-options/consequences.ts`), and Adjust studying opens
-`StudySettings.svelte`: how much a day, when a new card comes back, target
-retention when FSRS is on, how long a sitting runs, plus burying and the
-timer. It saves through `updateDeckConfigs` and `setPreferences`, the same
-calls Deck Options uses, and `study-settings.ts` holds the presets and the
-sentences that describe each choice.
+`StudySettings.svelte`: when a new card comes back, target retention when
+FSRS is on, how long a sitting runs, plus burying and the timer. It saves
+through `updateDeckConfigs` and `setPreferences`, the same calls Deck Options
+uses, and `study-settings.ts` holds the presets and the sentences that
+describe each choice.
+
+**No daily limits.** `RemainingLimits::new` in `rslib/src/decks/limits.rs`
+gives every deck an allowance no collection can use up, so everything due is
+always in the queue. The limits stored in decks and presets are not read, and
+keep syncing untouched: AnkiMobile and AnkiDroid still apply them.
+
+**Practice.** Practice all cards runs the review screen over a `PracticeLoop`
+(`practice.ts`) instead of the scheduler's queue: one shuffled pass over the
+deck after another, with Again bringing a card back a few cards later.
+`ReviewerController` never calls `answerCard` in this mode, so due dates, the
+review history and sync are untouched. Burying, suspending, deleting, flags and
+edits still act on the collection as usual.
 
 ## Commands
 

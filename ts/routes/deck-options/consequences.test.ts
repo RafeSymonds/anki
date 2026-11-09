@@ -3,29 +3,9 @@
 
 import { describe, expect, it } from "vitest";
 
-import {
-    firstSentence,
-    newCardsConsequence,
-    retentionConsequence,
-    reviewLimitConsequence,
-    reviewsAfterMonth,
-} from "./consequences";
+import { firstSentence, retentionConsequence } from "./consequences";
 
 describe("deck option consequences", () => {
-    it("estimates reviews from new cards", () => {
-        expect(reviewsAfterMonth(20)).toBe(100);
-        expect(reviewsAfterMonth(0)).toBe(0);
-        expect(newCardsConsequence(20)).toBe("20 new cards a day means roughly 100 reviews a day after a month.");
-        expect(newCardsConsequence(1)).toContain("1 new card a day");
-        expect(newCardsConsequence(0)).toMatch(/No new cards/);
-    });
-
-    it("warns when the review limit cannot keep up", () => {
-        expect(reviewLimitConsequence(200, 20)).toBe("Once 200 reviews are done, the rest wait until tomorrow.");
-        expect(reviewLimitConsequence(50, 20)).toMatch(/below the roughly 100/);
-        expect(reviewLimitConsequence(0, 20)).toMatch(/No reviews/);
-    });
-
     it("turns retention into forgotten cards per hundred", () => {
         expect(retentionConsequence(0.9)).toBe(
             "At 90%, about 10 in 100 due cards will be forgotten; higher means more reviews per day.",

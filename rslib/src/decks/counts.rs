@@ -16,18 +16,6 @@ pub(crate) struct DueCounts {
     pub total_cards: u32,
 }
 
-impl Deck {
-    /// Return the studied counts if studied today.
-    /// May be negative if user has extended limits.
-    pub(crate) fn new_rev_counts(&self, today: u32) -> (i32, i32) {
-        if self.common.last_day_studied == today {
-            (self.common.new_studied, self.common.review_studied)
-        } else {
-            (0, 0)
-        }
-    }
-}
-
 impl Collection {
     /// Get due counts for decks at the given timestamp.
     pub(crate) fn due_counts(

@@ -31,6 +31,7 @@ type Action = { name: string; run: (page: Page, rng: () => number) => Promise<vo
 
 const actions: Action[] = [
     { name: "study", run: (p) => p.getByRole("button", { name: "Study Now" }).click({ timeout: 2000 }) },
+    { name: "practice", run: (p) => p.getByRole("button", { name: "Practice all cards" }).click({ timeout: 2000 }) },
     { name: "space", run: (p) => p.keyboard.press("Space") },
     { name: "ease1", run: (p) => p.keyboard.press("1") },
     { name: "ease2", run: (p) => p.keyboard.press("2") },
@@ -54,7 +55,7 @@ const actions: Action[] = [
         name: "options",
         run: async (p) => {
             await p.getByRole("button", { name: "Options" }).first().click({ timeout: 2000 });
-            await p.frameLocator("iframe[title=page]").getByRole("heading", { name: "Daily Limits" }).first()
+            await p.frameLocator("iframe[title=page]").getByRole("tab", { name: "Essentials" })
                 .waitFor({ timeout: 8000 });
             await p.getByRole("button", { name: /Close/ }).first().click({ timeout: 2000 });
         },
@@ -182,7 +183,7 @@ const actions: Action[] = [
         name: "study-settings",
         run: async (p) => {
             await p.getByRole("button", { name: "Adjust studying" }).click({ timeout: 2000 });
-            // Cancel, not Save: the walk must leave the deck's limits alone.
+            // Cancel, not Save: the walk must leave the deck's settings alone.
             const dialog = p.getByRole("dialog");
             await dialog.getByRole("button", { name: "Cancel" }).waitFor({ timeout: 8000 });
             await dialog.getByRole("button", { name: "Cancel" }).click({ timeout: 2000 });

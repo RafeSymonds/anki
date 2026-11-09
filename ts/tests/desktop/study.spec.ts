@@ -88,7 +88,7 @@ test.describe("deck list and study", () => {
         await page.locator("nav.sidebar .row", { hasText: "Default" }).click();
         await page.getByRole("button", { name: "Options" }).first().click();
         const options = page.frameLocator("iframe[title=page]");
-        await expect(options.getByRole("heading", { name: "Daily Limits" }).first()).toBeVisible({ timeout: 20_000 });
+        await expect(options.getByRole("tab", { name: "Essentials" })).toBeVisible({ timeout: 20_000 });
         await page.getByRole("button", { name: /Close/ }).click();
         await expect(page.getByRole("button", { name: "Study Now" })).toBeVisible();
     });

@@ -22,7 +22,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     import AutoAdvance from "./AutoAdvance.svelte";
     import BuryOptions from "./BuryOptions.svelte";
     import ConfigSelector from "./ConfigSelector.svelte";
-    import DailyLimits from "./DailyLimits.svelte";
     import DisplayOrder from "./DisplayOrder.svelte";
     import FsrsOptionsOuter from "./FsrsOptionsOuter.svelte";
     import HtmlAddon from "./HtmlAddon.svelte";
@@ -55,7 +54,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     }
 
     export const options = {};
-    export const dailyLimits = {};
     export const newOptions = {};
     export const lapseOptions = {};
     export const buryOptions = {};
@@ -65,11 +63,10 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     export const advancedOptions = {};
     export const easyDays = {};
 
-    let dailyLimitsComponent: DailyLimits | undefined;
     let fsrsOptionsOuterComponent: FsrsOptionsOuter | undefined;
 
-    // Essentials shows the handful of settings most people change (daily
-    // limits and retention); Advanced shows everything. The choice sticks.
+    // Essentials shows the settings most people change (retention); Advanced
+    // shows everything. The choice sticks.
     type View = "essentials" | "advanced";
     const viewKey = "deckOptionsView";
     let view: View = "essentials";
@@ -96,9 +93,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
     $: essentials.set(!advanced);
 
     function onPresetChange() {
-        if (dailyLimitsComponent) {
-            dailyLimitsComponent.onPresetChange();
-        }
         if (fsrsOptionsOuterComponent) {
             fsrsOptionsOuterComponent.onPresetChange();
         }
@@ -134,14 +128,6 @@ License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
         class="container-columns"
     >
         <div>
-            <Row class="row-columns">
-                <DailyLimits
-                    {state}
-                    api={dailyLimits}
-                    bind:this={dailyLimitsComponent}
-                />
-            </Row>
-
             {#if advanced}
                 <Row class="row-columns">
                     <NewOptions {state} api={newOptions} />

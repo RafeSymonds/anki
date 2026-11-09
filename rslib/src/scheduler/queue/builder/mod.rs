@@ -317,21 +317,6 @@ mod test {
             self.add_or_update_deck(deck).unwrap();
         }
 
-        fn set_deck_new_limit(&mut self, deck: &mut Deck, new_limit: u32) {
-            let mut conf = DeckConfig::default();
-            conf.inner.new_per_day = new_limit;
-            self.add_or_update_deck_config(&mut conf).unwrap();
-            deck.normal_mut().unwrap().config_id = conf.id.0;
-            self.add_or_update_deck(deck).unwrap();
-        }
-
-        fn set_deck_review_limit(&mut self, deck: DeckId, limit: u32) {
-            let dcid = self.get_deck(deck).unwrap().unwrap().config_id().unwrap();
-            let mut conf = self.get_deck_config(dcid, false).unwrap().unwrap();
-            conf.inner.reviews_per_day = limit;
-            self.add_or_update_deck_config(&mut conf).unwrap();
-        }
-
         fn queue_as_deck_and_template(&mut self, deck_id: DeckId) -> Vec<(DeckId, u16)> {
             self.build_queues(deck_id)
                 .unwrap()
@@ -364,11 +349,31 @@ mod test {
     }
 
     #[test]
-    fn should_build_empty_queue_if_limit_is_reached() {
+    fn stored_limits_do_not_hold_cards_back() {
         let mut col = Collection::new();
+        col.update_default_deck_config(|config| {
+            config.new_per_day = 0;
+            config.reviews_per_day = 0;
+        });
+        CardAdder::new().add(&mut col);
         CardAdder::new().due_dates(["0"]).add(&mut col);
-        col.set_deck_review_limit(DeckId(1), 0);
-        assert_eq!(col.queue_as_deck_and_template(DeckId(1)), vec![]);
+        assert_eq!(col.card_queue_len(), 2);
+    }
+
+    #[test]
+    fn stored_parent_limits_do_not_hold_cards_back() {
+        let mut col = Collection::new();
+        col.set_config_bool(BoolKey::ApplyAllParentLimits, true, false)
+            .unwrap();
+        col.update_default_deck_config(|config| {
+            config.new_per_day = 0;
+        });
+        let child = DeckAdder::new("Default::child")
+            .with_config(|_| ())
+            .add(&mut col);
+        CardAdder::new().deck(child.id).add(&mut col);
+        col.set_current_deck(child.id).unwrap();
+        assert_eq!(col.card_queue_len(), 1);
     }
 
     #[test]
@@ -379,7 +384,7 @@ mod test {
         // ┣━━child━━grandchild
         // ┗━━child_2
         let mut parent = DeckAdder::new("parent").add(&mut col);
-        let mut child = DeckAdder::new("parent::child").add(&mut col);
+        let child = DeckAdder::new("parent::child").add(&mut col);
         let child_2 = DeckAdder::new("parent::child_2").add(&mut col);
         let grandchild = DeckAdder::new("parent::child::grandchild").add(&mut col);
 
@@ -387,9 +392,6 @@ mod test {
         for deck in [&parent, &child, &child_2, &grandchild] {
             CardAdder::new().siblings(2).deck(deck.id).add(&mut col);
         }
-
-        // set child's new limit to 3, which should affect grandchild
-        col.set_deck_new_limit(&mut child, 3);
 
         // depth-first tree order
         col.set_deck_gather_order(&mut parent, NewCardGatherPriority::Deck);
@@ -399,6 +401,7 @@ mod test {
             (child.id, 0),
             (child.id, 1),
             (grandchild.id, 0),
+            (grandchild.id, 1),
             (child_2.id, 0),
             (child_2.id, 1),
         ];
@@ -414,6 +417,7 @@ mod test {
             (child_2.id, 0),
             (child_2.id, 1),
             (grandchild.id, 0),
+            (grandchild.id, 1),
         ];
         assert_eq!(col.queue_as_deck_and_template(parent.id), cards);
 
@@ -425,6 +429,7 @@ mod test {
             (child_2.id, 0),
             (child_2.id, 1),
             (child.id, 0),
+            (child.id, 1),
             (parent.id, 0),
             (parent.id, 1),
         ];
@@ -507,45 +512,5 @@ mod test {
         // no burying was performed, or the first built queue anticipated it and didn't
         // include the buried card.
         assert_eq!(col.card_queue_len(), old_queue_len - 1);
-    }
-
-    #[test]
-    fn new_cards_may_ignore_review_limit() {
-        let mut col = Collection::new();
-        col.set_config_bool(BoolKey::NewCardsIgnoreReviewLimit, true, false)
-            .unwrap();
-        col.update_default_deck_config(|config| {
-            config.reviews_per_day = 0;
-        });
-        CardAdder::new().add(&mut col);
-
-        // review limit doesn't apply to new card
-        assert_eq!(col.card_queue_len(), 1);
-    }
-
-    #[test]
-    fn reviews_dont_affect_new_limit_before_review_limit_is_reached() {
-        let mut col = Collection::new();
-        col.update_default_deck_config(|config| {
-            config.new_per_day = 1;
-        });
-        CardAdder::new().siblings(2).due_dates(["0"]).add(&mut col);
-        assert_eq!(col.card_queue_len(), 2);
-    }
-
-    #[test]
-    fn may_apply_parent_limits() {
-        let mut col = Collection::new();
-        col.set_config_bool(BoolKey::ApplyAllParentLimits, true, false)
-            .unwrap();
-        col.update_default_deck_config(|config| {
-            config.new_per_day = 0;
-        });
-        let child = DeckAdder::new("Default::child")
-            .with_config(|_| ())
-            .add(&mut col);
-        CardAdder::new().deck(child.id).add(&mut col);
-        col.set_current_deck(child.id).unwrap();
-        assert_eq!(col.card_queue_len(), 0);
     }
 }

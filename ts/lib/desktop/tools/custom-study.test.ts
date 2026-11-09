@@ -10,7 +10,7 @@ import { describe, expect, it } from "vitest";
 
 import {
     clampSpinner,
-    countWithChildren,
+    CUSTOM_STUDY_KINDS,
     customStudyRequest,
     DYN_MAX_SIZE,
     initialTagSelection,
@@ -18,12 +18,6 @@ import {
 } from "./custom-study";
 
 const defaults = new CustomStudyDefaultsResponse({
-    extendNew: 3,
-    extendReview: 7,
-    availableNew: 12,
-    availableNewInChildren: 4,
-    availableReview: 0,
-    availableReviewInChildren: 0,
     tags: [
         { name: "a", include: true, exclude: false },
         { name: "b", include: false, exclude: true },
@@ -33,18 +27,22 @@ const defaults = new CustomStudyDefaultsResponse({
 
 describe("spinnerFor", () => {
     it("mirrors onRadioChange in customstudy.py", () => {
-        expect(spinnerFor("new", defaults)).toEqual({ min: -DYN_MAX_SIZE, max: DYN_MAX_SIZE, value: 3 });
-        expect(spinnerFor("review", defaults)).toEqual({ min: -DYN_MAX_SIZE, max: DYN_MAX_SIZE, value: 7 });
-        expect(spinnerFor("forgot", defaults)).toEqual({ min: 1, max: 30, value: 1 });
-        expect(spinnerFor("ahead", defaults)).toEqual({ min: 1, max: DYN_MAX_SIZE, value: 1 });
-        expect(spinnerFor("preview", defaults)).toEqual({ min: 1, max: DYN_MAX_SIZE, value: 1 });
-        expect(spinnerFor("cram", defaults)).toEqual({ min: 1, max: DYN_MAX_SIZE, value: 100 });
+        expect(spinnerFor("forgot")).toEqual({ min: 1, max: 30, value: 1 });
+        expect(spinnerFor("ahead")).toEqual({ min: 1, max: DYN_MAX_SIZE, value: 1 });
+        expect(spinnerFor("preview")).toEqual({ min: 1, max: DYN_MAX_SIZE, value: 1 });
+        expect(spinnerFor("cram")).toEqual({ min: 1, max: DYN_MAX_SIZE, value: 100 });
+    });
+});
+
+describe("CUSTOM_STUDY_KINDS", () => {
+    it("offers nothing that raises a limit", () => {
+        expect(CUSTOM_STUDY_KINDS).toEqual(["forgot", "ahead", "preview", "cram"]);
     });
 });
 
 describe("clampSpinner", () => {
     it("keeps typed values inside the range", () => {
-        const spec = spinnerFor("forgot", defaults);
+        const spec = spinnerFor("forgot");
         expect(clampSpinner(45, spec)).toBe(30);
         expect(clampSpinner(0, spec)).toBe(1);
         expect(clampSpinner(2.7, spec)).toBe(2);
@@ -52,25 +50,9 @@ describe("clampSpinner", () => {
     });
 });
 
-describe("countWithChildren", () => {
-    it("adds the subdeck count only when there is one", () => {
-        expect(countWithChildren(12, 0)).toBe("12");
-        // Translations are not loaded under vitest; the child count is appended as its own phrase.
-        expect(countWithChildren(12, 4)).toMatch(/^12 .+/);
-    });
-});
-
 describe("customStudyRequest", () => {
     it("sets the oneof for each option (accept in customstudy.py)", () => {
         const deckId = 5n;
-        expect(new CustomStudyRequest(customStudyRequest(deckId, "new", -2)).value).toEqual({
-            case: "newLimitDelta",
-            value: -2,
-        });
-        expect(new CustomStudyRequest(customStudyRequest(deckId, "review", 9)).value).toEqual({
-            case: "reviewLimitDelta",
-            value: 9,
-        });
         expect(new CustomStudyRequest(customStudyRequest(deckId, "forgot", 3)).value).toEqual({
             case: "forgotDays",
             value: 3,

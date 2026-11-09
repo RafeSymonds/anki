@@ -4,14 +4,12 @@
 use std::collections::HashMap;
 use std::iter::Peekable;
 
-use anki_proto::decks::deck::normal::DayLimit;
 use id_tree::InsertBehavior;
 use id_tree::Node;
 use id_tree::NodeId;
 use id_tree::Tree;
 
 use super::Deck;
-use super::NormalDeck;
 use crate::deckconfig::DeckConfig;
 use crate::deckconfig::DeckConfigId;
 use crate::prelude::*;
@@ -22,34 +20,6 @@ pub(crate) enum LimitKind {
     New,
 }
 
-/// The deck's review limit for today, or its regular one, if any is
-/// configured.
-pub fn current_review_limit(deck: &NormalDeck, today: u32) -> Option<u32> {
-    review_limit_today(deck, today).or(deck.review_limit)
-}
-
-/// The deck's new limit for today, or its regular one, if any is
-/// configured.
-pub fn current_new_limit(deck: &NormalDeck, today: u32) -> Option<u32> {
-    new_limit_today(deck, today).or(deck.new_limit)
-}
-
-/// The deck's review limit for today.
-pub fn review_limit_today(deck: &NormalDeck, today: u32) -> Option<u32> {
-    deck.review_limit_today
-        .and_then(|day_limit| limit_if_today(day_limit, today))
-}
-
-/// The deck's new limit for today.
-pub fn new_limit_today(deck: &NormalDeck, today: u32) -> Option<u32> {
-    deck.new_limit_today
-        .and_then(|day_limit| limit_if_today(day_limit, today))
-}
-
-pub fn limit_if_today(limit: DayLimit, today: u32) -> Option<u32> {
-    (limit.today == today).then_some(limit.limit)
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct RemainingLimits {
     pub(crate) review: u32,
@@ -58,61 +28,17 @@ pub(crate) struct RemainingLimits {
 }
 
 impl RemainingLimits {
+    /// This fork has no daily limits, so every deck starts with the same
+    /// allowance, which no collection can use up. The limits stored in decks
+    /// and presets stay as they are: they still sync, and other clients of the
+    /// same collection keep applying them.
     pub(crate) fn new(
-        deck: &Deck,
-        config: Option<&DeckConfig>,
-        today: u32,
-        new_cards_ignore_review_limit: bool,
+        _deck: &Deck,
+        _config: Option<&DeckConfig>,
+        _today: u32,
+        _new_cards_ignore_review_limit: bool,
     ) -> Self {
-        if let Ok(normal) = deck.normal() {
-            if let Some(config) = config {
-                return Self::new_for_normal_deck(
-                    deck,
-                    today,
-                    new_cards_ignore_review_limit,
-                    normal,
-                    config,
-                );
-            }
-        }
         Self::default()
-    }
-
-    fn new_for_normal_deck(
-        deck: &Deck,
-        today: u32,
-        new_cards_ignore_review_limit: bool,
-        normal: &NormalDeck,
-        config: &DeckConfig,
-    ) -> RemainingLimits {
-        Self::new_for_normal_deck_v3(deck, today, new_cards_ignore_review_limit, normal, config)
-    }
-
-    fn new_for_normal_deck_v3(
-        deck: &Deck,
-        today: u32,
-        new_cards_ignore_review_limit: bool,
-        normal: &NormalDeck,
-        config: &DeckConfig,
-    ) -> RemainingLimits {
-        let mut review_limit =
-            current_review_limit(normal, today).unwrap_or(config.inner.reviews_per_day) as i32;
-        let mut new_limit =
-            current_new_limit(normal, today).unwrap_or(config.inner.new_per_day) as i32;
-        let (new_today_count, review_today_count) = deck.new_rev_counts(today);
-
-        review_limit -= review_today_count;
-        new_limit -= new_today_count;
-        if !new_cards_ignore_review_limit {
-            review_limit -= new_today_count;
-            new_limit = new_limit.min(review_limit);
-        }
-
-        Self {
-            review: review_limit.max(0) as u32,
-            new: new_limit.max(0) as u32,
-            cap_new_to_review: !new_cards_ignore_review_limit,
-        }
     }
 
     pub(crate) fn get(&self, kind: LimitKind) -> u32 {
@@ -159,8 +85,8 @@ impl DecrementResult {
 impl Default for RemainingLimits {
     fn default() -> Self {
         RemainingLimits {
-            review: 9999,
-            new: 9999,
+            review: u32::MAX,
+            new: u32::MAX,
             cap_new_to_review: false,
         }
     }

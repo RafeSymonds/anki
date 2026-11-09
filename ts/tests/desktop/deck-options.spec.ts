@@ -7,16 +7,15 @@ test("deck options open on the essentials and can show everything", async ({ pag
     await page.goto("/");
     await page.getByRole("button", { name: "Options" }).first().click();
     const options = page.frameLocator("iframe[title=page]");
-    await expect(options.getByRole("heading", { name: "Daily Limits" }).first()).toBeVisible({ timeout: 20_000 });
-    // Essentials hides the long tail of sections and says what each setting means.
+    await expect(options.getByRole("tab", { name: "Essentials" })).toBeVisible({ timeout: 20_000 });
+    // Essentials hides the long tail of sections.
     await expect(options.getByRole("heading", { name: "Auto Advance" })).toHaveCount(0);
-    await expect(options.getByText(/reviews a day after a month/)).toBeVisible();
-    await expect(options.getByText(/the rest wait until tomorrow/)).toBeVisible();
 
     await options.getByRole("tab", { name: "Advanced" }).click();
     await expect(options.getByRole("heading", { name: "Auto Advance" }).first()).toBeVisible();
-    await expect(options.getByText(/reviews a day after a month/)).toHaveCount(0);
     await expect(options.getByRole("heading", { name: "Burying" }).first()).toBeVisible();
+    // There are no daily limits to set, in either view.
+    await expect(options.getByRole("heading", { name: "Daily Limits" })).toHaveCount(0);
 
     await options.getByRole("tab", { name: "Essentials" }).click();
     await expect(options.getByRole("heading", { name: "Auto Advance" })).toHaveCount(0);

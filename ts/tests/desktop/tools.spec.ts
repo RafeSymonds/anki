@@ -1,23 +1,7 @@
 // Copyright: Ankitects Pty Ltd and contributors
 // License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-import { expect, type Page, test } from "@playwright/test";
-
-async function overviewNewCount(page: Page): Promise<number> {
-    return Number(await page.locator(".overview .new-count").innerText());
-}
-
-/** Open the custom study dialog and change today's new card limit by `delta`. */
-async function changeNewLimit(page: Page, delta: number): Promise<void> {
-    await page.getByRole("button", { name: "Custom Study" }).click();
-    const dialog = page.getByRole("dialog", { name: "Custom Study" });
-    await expect(dialog.getByRole("radio", { name: "Increase today's new card limit" })).toBeChecked();
-    const spinner = dialog.locator("input.spinner");
-    await expect(spinner).toBeVisible();
-    await spinner.fill(String(delta));
-    await dialog.getByRole("button", { name: "OK" }).click();
-    await expect(dialog).toHaveCount(0);
-}
+import { expect, test } from "@playwright/test";
 
 test.describe("tools", () => {
     test("opens the statistics page", async ({ page }) => {
@@ -29,23 +13,14 @@ test.describe("tools", () => {
         await expect(page.getByRole("button", { name: "Study Now" })).toBeVisible();
     });
 
-    test("custom study changes today's new card limit", async ({ page }) => {
+    test("custom study has no limits to raise", async ({ page }) => {
         await page.goto("/");
-        await expect(page.locator(".overview .new-count")).toBeVisible();
-        const before = await overviewNewCount(page);
-        expect(before).toBeGreaterThan(5);
-
-        // The seeded deck has 12 new cards under a limit of 20, so only a
-        // change that brings the limit below the count moves it (the exact
-        // count also depends on what earlier specs studied today); the deltas
-        // accumulate, so raising it by the same amount restores the count.
-        await changeNewLimit(page, -15);
-        const count = page.locator(".overview .new-count");
-        await expect(count).not.toHaveText(String(before), { timeout: 10_000 });
-        expect(await overviewNewCount(page)).toBeLessThan(before);
-
-        await changeNewLimit(page, 15);
-        await expect(page.locator(".overview .new-count")).toHaveText(String(before), { timeout: 10_000 });
+        await page.getByRole("button", { name: "Custom Study" }).click();
+        const dialog = page.getByRole("dialog", { name: "Custom Study" });
+        await expect(dialog.getByRole("radio", { name: "Review forgotten cards" })).toBeChecked();
+        await expect(dialog.getByRole("radio", { name: /card limit/ })).toHaveCount(0);
+        await dialog.getByRole("button", { name: "Cancel" }).click();
+        await expect(dialog).toHaveCount(0);
     });
 
     test("creates a filtered deck from the dialog", async ({ page }) => {

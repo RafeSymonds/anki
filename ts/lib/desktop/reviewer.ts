@@ -36,12 +36,14 @@ import {
     addNoteTags,
     answerCard,
     buryOrSuspendCards,
+    cardsOfNote,
     compareAnswer,
     describeNextStates,
     encodeIriPaths,
     extractAvTags,
     extractClozeForTyping,
     getAllConfig,
+    getCard,
     getConfigBool,
     getDeck,
     getDeckConfig,
@@ -73,6 +75,7 @@ import {
     withStyle,
 } from "./card-html";
 import { registerFrontendHandler, typedHandler } from "./frontend-service";
+import { PracticeLoop } from "./practice";
 
 export type Ease = 1 | 2 | 3 | 4;
 export type ReviewerState = "idle" | "question" | "answer" | "transition" | "finished";
@@ -181,6 +184,15 @@ export function answerLabels(): [string, string, string, string] {
     return [tr.studyingAgain(), tr.studyingHard(), tr.studyingGood(), tr.studyingEasy()];
 }
 
+/** Practice takes two answers: see the card again soon, or next round. */
+export function practiceButtons(): AnswerButton[] {
+    const [again, , good] = answerLabels();
+    return [
+        { ease: 1, label: again, interval: "Soon" },
+        { ease: 3, label: good, interval: "Next round" },
+    ];
+}
+
 export interface Timebox {
     startedAt: number;
     startReps: number;
@@ -260,6 +272,8 @@ export class ReviewerController {
     readonly autoAdvance: Writable<boolean> = writable(false);
     /** Set when the timebox limit passes; the UI asks whether to continue. */
     readonly timeboxHit: Writable<TimeboxHit | null> = writable(null);
+    /** The round being practiced; null when studying through the scheduler. */
+    readonly practiceRound: Writable<number | null> = writable(null);
 
     card: Card | null = null;
     private note: Note | null = null;
@@ -285,6 +299,7 @@ export class ReviewerController {
     private timebox: Timebox | null = null;
     private advanceTimer: ReturnType<typeof setTimeout> | undefined;
     private pendingAdvance: (() => void) | null = null;
+    private practice: PracticeLoop | null = null;
     /** Called when the queue runs dry. */
     onFinished: (() => void) | null = null;
 
@@ -294,6 +309,12 @@ export class ReviewerController {
 
     setNightMode(nightMode: boolean): void {
         this.nightMode = nightMode;
+    }
+
+    /** Make the next `start` go over these cards instead of the scheduler's
+     * queue. Answers then stay in the loop, and `stop` ends it. */
+    preparePractice(cardIds: bigint[]): void {
+        this.practice = new PracticeLoop(cardIds);
     }
 
     async start(): Promise<void> {
@@ -340,6 +361,8 @@ export class ReviewerController {
         this.card = null;
         this.currentCard.set(null);
         this.state.set("idle");
+        this.practice = null;
+        this.practiceRound.set(null);
     }
 
     /** Re-render the current card after its note was edited, keeping the
@@ -408,30 +431,64 @@ export class ReviewerController {
     }
 
     async nextCard(): Promise<void> {
+        if (this.practice) {
+            await this.nextPracticeCard(this.practice);
+            return;
+        }
         const queued = await getQueuedCards({ fetchLimit: 1, intradayLearningOnly: false });
         if (!queued.cards.length) {
-            this.card = null;
-            this.currentCard.set(null);
-            this.state.set("finished");
-            this.onFinished?.();
+            this.finish();
             return;
         }
         this.counts.set(countsForQueue(queued));
-        await this.loadCard(queued.cards[0]);
+        await this.loadQueuedCard(queued.cards[0]);
         await this.render();
         await this.showQuestion();
     }
 
-    private async loadCard(top: QueuedCards_QueuedCard): Promise<void> {
+    private finish(): void {
+        this.card = null;
+        this.currentCard.set(null);
+        this.state.set("finished");
+        this.onFinished?.();
+    }
+
+    private async nextPracticeCard(loop: PracticeLoop): Promise<void> {
+        for (let id = loop.current; id !== null; id = loop.current) {
+            let card: Card;
+            try {
+                card = await getCard({ cid: id }, { alertOnError: false });
+            } catch {
+                // Gone since practice started, e.g. deleted by a sync.
+                loop.remove([id]);
+                continue;
+            }
+            this.practiceRound.set(loop.round);
+            this.counts.set({ idx: 2, counts: [0, 0, loop.remaining] });
+            this.states = null;
+            this.context = null;
+            await this.loadCard(card);
+            await this.render();
+            await this.showQuestion();
+            return;
+        }
+        this.finish();
+    }
+
+    private async loadQueuedCard(top: QueuedCards_QueuedCard): Promise<void> {
         const card = top.card!;
         const states = top.states ?? new SchedulingStates();
         if (states.current) {
             states.current.customData = card.customData;
         }
-        this.card = card;
-        this.currentCard.set(card);
         this.states = states;
         this.context = top.context ?? null;
+        await this.loadCard(card);
+    }
+
+    private async loadCard(card: Card): Promise<void> {
+        this.card = card;
+        this.currentCard.set(card);
         this.timerStarted = Date.now();
         this.typedAnswer = null;
         this.note = await getNote({ nid: card.noteId });
@@ -551,7 +608,7 @@ export class ReviewerController {
     }
 
     private runStateMutation(): void {
-        if (!this.stateMutationJs || !this.view?.runStateMutation) {
+        if (this.practice || !this.stateMutationJs || !this.view?.runStateMutation) {
             this.statesMutated = true;
             return;
         }
@@ -599,6 +656,10 @@ export class ReviewerController {
     }
 
     private async showEaseButtons(): Promise<void> {
+        if (this.practice) {
+            this.buttons.set(practiceButtons());
+            return;
+        }
         // Custom scheduling JS may still be adjusting the next states.
         for (let i = 0; i < 40 && !this.statesMutated; i++) {
             await new Promise((resolve) => setTimeout(resolve, 50));
@@ -619,17 +680,33 @@ export class ReviewerController {
 
     async answer(ease: Ease): Promise<void> {
         const card = this.card;
-        if (!card || !this.states || get(this.state) !== "answer") {
+        if (!card || get(this.state) !== "answer") {
             return;
         }
-        const answer = buildCardAnswer(card.id, this.states, ease, Date.now(), Date.now() - this.timerStarted);
-        this.state.set("transition");
-        this.clearAdvanceTimer();
-        await answerCard(answer);
-        this.reps += 1;
-        if (answer.newState && (await stateIsLeech(answer.newState)).val) {
-            this.notice.set(tr.studyingCardWasALeech());
+        if (this.practice) {
+            if (ease !== 1 && ease !== 3) {
+                return;
+            }
+            this.state.set("transition");
+            this.clearAdvanceTimer();
+            if (ease === 1) {
+                this.practice.again();
+            } else {
+                this.practice.good();
+            }
+        } else {
+            if (!this.states) {
+                return;
+            }
+            const answer = buildCardAnswer(card.id, this.states, ease, Date.now(), Date.now() - this.timerStarted);
+            this.state.set("transition");
+            this.clearAdvanceTimer();
+            await answerCard(answer);
+            if (answer.newState && (await stateIsLeech(answer.newState)).val) {
+                this.notice.set(tr.studyingCardWasALeech());
+            }
         }
+        this.reps += 1;
         // `check_timebox` in reviewer.py: pause for the prompt instead of moving on.
         const hit = timeboxReached(this.timebox, Date.now(), this.reps);
         if (hit) {
@@ -695,6 +772,11 @@ export class ReviewerController {
     }
 
     private onAnswerTimeout(): void {
+        if (this.practice) {
+            // The preset's action could bury the card, which practice must not do on its own.
+            void this.answer(3);
+            return;
+        }
         const step = answerTimeoutStep(this.config?.answerAction);
         switch (step.kind) {
             case "answer":
@@ -812,12 +894,20 @@ export class ReviewerController {
         if (!card) {
             return;
         }
+        await this.removeFromPractice(card, wholeNote);
         await buryOrSuspendCards({
             cardIds: wholeNote ? [] : [card.id],
             noteIds: wholeNote ? [card.noteId] : [],
             mode,
         });
         await this.nextCard();
+    }
+
+    /** Practice picks its own next card, so it has to hear what just left the deck. */
+    private async removeFromPractice(card: Card, wholeNote: boolean): Promise<void> {
+        if (this.practice) {
+            this.practice.remove(wholeNote ? (await cardsOfNote({ nid: card.noteId })).cids : [card.id]);
+        }
     }
 
     buryCard(): Promise<void> {
@@ -841,6 +931,7 @@ export class ReviewerController {
         if (!card) {
             return;
         }
+        await this.removeFromPractice(card, true);
         await removeNotes({ noteIds: [card.noteId], cardIds: [] });
         await this.nextCard();
     }

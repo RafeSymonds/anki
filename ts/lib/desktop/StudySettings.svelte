@@ -2,10 +2,10 @@
 Copyright: Ankitects Pty Ltd and contributors
 License: GNU AGPL, version 3 or later; http://www.gnu.org/licenses/agpl.html
 
-How this deck is studied, in the four choices that change how it feels: how
-much a day, how soon a new card comes back, how firmly it should stick, and
-how long a sitting runs. Everything here writes through the same calls Deck
-Options uses; Deck Options is one click away for the rest.
+How this deck is studied, in the choices that change how it feels: how soon a
+new card comes back, how firmly it should stick, and how long a sitting runs.
+Everything here writes through the same calls Deck Options uses; Deck Options
+is one click away for the rest.
 -->
 <script lang="ts">
     import type { DeckConfig } from "@generated/anki/deck_config_pb";
@@ -22,7 +22,6 @@ Options uses; Deck Options is one click away for the rest.
 
     import Modal from "./tools/Modal.svelte";
     import {
-        clampLimit,
         describeSteps,
         LEARNING_PACES,
         type PaceId,
@@ -33,10 +32,6 @@ Options uses; Deck Options is one click away for the rest.
         SESSION_CHOICES,
         sessionLabel,
         sessionSummary,
-        STUDY_STYLES,
-        type StudyStyleId,
-        styleMatching,
-        workloadSummary,
     } from "./study-settings";
 
     export let deckId: bigint;
@@ -57,8 +52,6 @@ Options uses; Deck Options is one click away for the rest.
     /** Everything getDeckConfigsForUpdate returned, for the save call. */
     let source: Awaited<ReturnType<typeof getDeckConfigsForUpdate>> | null = null;
 
-    let newPerDay = 20;
-    let reviewsPerDay = 200;
     let steps: number[] = [1, 10];
     let retention = 0.9;
     let sessionMinutes = 0;
@@ -66,8 +59,6 @@ Options uses; Deck Options is one click away for the rest.
     let showTimer = false;
 
     $: fsrs = source?.fsrs ?? false;
-    $: plan = { newPerDay, reviewsPerDay };
-    $: style = styleMatching(plan);
     $: pace = paceMatching(steps);
 
     onMount(load);
@@ -81,29 +72,14 @@ Options uses; Deck Options is one click away for the rest.
             null;
         const values = config?.config;
         if (values) {
-            newPerDay = values.newPerDay;
-            reviewsPerDay = values.reviewsPerDay;
             steps = [...values.learnSteps];
             retention = values.desiredRetention || 0.9;
             burySiblings = values.buryNew || values.buryReviews;
             showTimer = values.showTimer;
         }
-        // A per-deck limit for today wins over the preset; show the number
-        // the user will actually get.
-        const limits = source.currentDeck?.limits;
-        newPerDay = limits?.new ?? newPerDay;
-        reviewsPerDay = limits?.review ?? reviewsPerDay;
         preferences = await getPreferences({});
         sessionMinutes = Math.round((preferences.reviewing?.timeLimitSecs ?? 0) / 60);
         loading = false;
-    }
-
-    function applyStyle(id: StudyStyleId): void {
-        const chosen = STUDY_STYLES.find((entry) => entry.id === id);
-        if (chosen) {
-            newPerDay = chosen.plan.newPerDay;
-            reviewsPerDay = chosen.plan.reviewsPerDay;
-        }
     }
 
     function applyPace(id: PaceId): void {
@@ -120,27 +96,18 @@ Options uses; Deck Options is one click away for the rest.
         }
         saving = true;
         try {
-            config.config.newPerDay = clampLimit(newPerDay);
-            config.config.reviewsPerDay = clampLimit(reviewsPerDay);
             config.config.learnSteps = steps;
             config.config.desiredRetention = retention;
             config.config.buryNew = burySiblings;
             config.config.buryReviews = burySiblings;
             config.config.showTimer = showTimer;
-            const limits = source.currentDeck?.limits;
-            if (limits) {
-                // The deck's own limits would otherwise override what was
-                // just set on the preset.
-                limits.new = undefined;
-                limits.review = undefined;
-            }
             await updateDeckConfigs({
                 targetDeckId: deckId,
                 configs: [config],
                 removedConfigIds: [],
                 mode: UpdateDeckConfigsMode.NORMAL,
                 cardStateCustomizer: source.cardStateCustomizer,
-                limits,
+                limits: source.currentDeck?.limits,
                 newCardsIgnoreReviewLimit: source.newCardsIgnoreReviewLimit,
                 fsrs: source.fsrs,
                 applyAllParentLimits: source.applyAllParentLimits,
@@ -170,46 +137,6 @@ Options uses; Deck Options is one click away for the rest.
     {#if loading}
         <p class="muted">Loading…</p>
     {:else}
-        <section>
-            <h3>How much a day</h3>
-            <div class="choices">
-                {#each STUDY_STYLES as entry (entry.id)}
-                    <button
-                        class="choice"
-                        class:selected={style === entry.id}
-                        aria-pressed={style === entry.id}
-                        on:click={() => applyStyle(entry.id)}
-                    >
-                        <span class="label">{entry.label}</span>
-                        <span class="hint">{entry.hint}</span>
-                    </button>
-                {/each}
-            </div>
-            <div class="numbers">
-                <label>
-                    <span>New cards a day</span>
-                    <input
-                        type="number"
-                        min="0"
-                        max="9999"
-                        bind:value={newPerDay}
-                        on:change={() => (newPerDay = clampLimit(newPerDay))}
-                    />
-                </label>
-                <label>
-                    <span>Most reviews a day</span>
-                    <input
-                        type="number"
-                        min="0"
-                        max="9999"
-                        bind:value={reviewsPerDay}
-                        on:change={() => (reviewsPerDay = clampLimit(reviewsPerDay))}
-                    />
-                </label>
-            </div>
-            <p class="consequence">{workloadSummary(plan)}</p>
-        </section>
-
         <section>
             <h3>When a new card comes back</h3>
             <div class="choices">
@@ -352,21 +279,6 @@ Options uses; Deck Options is one click away for the rest.
         font-size: 12px;
         color: var(--fg-subtle);
         line-height: 1.35;
-    }
-    .numbers {
-        display: flex;
-        gap: 16px;
-        margin-top: 12px;
-    }
-    .numbers label {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-size: 13px;
-    }
-    .numbers input {
-        width: 74px;
-        font-variant-numeric: tabular-nums;
     }
     .session {
         display: flex;

@@ -410,19 +410,14 @@ mod test {
         parent_deck.common.new_studied = 1;
         col.add_or_update_deck(&mut parent_deck)?;
 
-        // with the default limit of 20, there should still be 4 due
-        let tree = col.deck_tree(Some(TimestampSecs::now()))?;
-        assert_eq!(tree.children[0].new_count, 4);
-        assert_eq!(tree.children[0].children[0].new_count, 4);
-
-        // set the limit to 4, which should mean 3 are left
+        // what was studied today and the stored limit do not hide any of them
         let mut conf = col.get_deck_config(DeckConfigId(1), false)?.unwrap();
-        conf.inner.new_per_day = 4;
+        conf.inner.new_per_day = 1;
         col.add_or_update_deck_config(&mut conf)?;
 
         let tree = col.deck_tree(Some(TimestampSecs::now()))?;
-        assert_eq!(tree.children[0].new_count, 3);
-        assert_eq!(tree.children[0].children[0].new_count, 3);
+        assert_eq!(tree.children[0].new_count, 4);
+        assert_eq!(tree.children[0].children[0].new_count, 4);
 
         Ok(())
     }
@@ -459,14 +454,13 @@ mod test {
         col.add_note(&mut note, grandchild_2.id)?;
 
         let parent = &col.deck_tree(Some(TimestampSecs::now()))?.children[0];
-        // grandchildren: own cards, limited by own new limits
+        // grandchildren: own cards, whatever their stored new limits say
         assert_eq!(parent.children[0].children[0].new_count, 2);
-        assert_eq!(parent.children[0].children[1].new_count, 1);
-        // child: cards from self and children, limited by own new limit
-        assert_eq!(parent.children[0].new_count, 4);
-        // parent: cards from self and all subdecks, all limits in the hierarchy are
-        // respected
-        assert_eq!(parent.new_count, 6);
+        assert_eq!(parent.children[0].children[1].new_count, 2);
+        // child: cards from self and children
+        assert_eq!(parent.children[0].new_count, 6);
+        // parent: cards from self and all subdecks
+        assert_eq!(parent.new_count, 8);
         assert_eq!(parent.total_including_children, 8);
         assert_eq!(parent.total_in_deck, 2);
 

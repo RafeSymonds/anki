@@ -12,8 +12,8 @@ import type { CustomStudyDefaultsResponse, CustomStudyRequest } from "@generated
 import { CustomStudyRequest_Cram_CramKind } from "@generated/anki/scheduler_pb";
 import * as tr from "@generated/ftl";
 
-/** RADIO_NEW .. RADIO_CRAM in customstudy.py. */
-export type CustomStudyKind = "new" | "review" | "forgot" | "ahead" | "preview" | "cram";
+/** RADIO_FORGOT .. RADIO_CRAM in customstudy.py; there are no limits to raise here. */
+export type CustomStudyKind = "forgot" | "ahead" | "preview" | "cram";
 
 /** TYPE_NEW .. TYPE_ALL: the list under the cram option. */
 export type CramType = "new" | "due" | "review" | "all";
@@ -27,15 +27,11 @@ export interface SpinnerSpec {
     value: number;
 }
 
-export const CUSTOM_STUDY_KINDS: CustomStudyKind[] = ["new", "review", "forgot", "ahead", "preview", "cram"];
+export const CUSTOM_STUDY_KINDS: CustomStudyKind[] = ["forgot", "ahead", "preview", "cram"];
 export const CRAM_TYPES: CramType[] = ["new", "due", "review", "all"];
 
 export function kindLabel(kind: CustomStudyKind): string {
     switch (kind) {
-        case "new":
-            return tr.customStudyIncreaseTodaysNewCardLimit();
-        case "review":
-            return tr.customStudyIncreaseTodaysReviewCardLimit();
         case "forgot":
             return tr.customStudyReviewForgottenCards();
         case "ahead":
@@ -60,33 +56,8 @@ export function cramTypeLabel(type: CramType): string {
     }
 }
 
-/** count_with_children in customstudy.py. */
-export function countWithChildren(parent: number, children: number): string {
-    return children ? `${parent} ${tr.customStudyAvailableChildCount({ count: children })}` : `${parent}`;
-}
-
-/** The line above the spinner; empty for options that have none. */
-export function titleText(kind: CustomStudyKind, defaults: CustomStudyDefaultsResponse): string {
-    switch (kind) {
-        case "new":
-            return tr.customStudyAvailableNewCards2({
-                countString: countWithChildren(defaults.availableNew, defaults.availableNewInChildren),
-            });
-        case "review":
-            return tr.customStudyAvailableReviewCards2({
-                countString: countWithChildren(defaults.availableReview, defaults.availableReviewInChildren),
-            });
-        default:
-            return "";
-    }
-}
-
 export function textBeforeSpinner(kind: CustomStudyKind): string {
     switch (kind) {
-        case "new":
-            return tr.customStudyIncreaseTodaysNewCardLimitBy();
-        case "review":
-            return tr.customStudyIncreaseTodaysReviewLimitBy();
         case "forgot":
             return tr.customStudyReviewCardsForgottenInLast();
         case "ahead":
@@ -101,9 +72,6 @@ export function textBeforeSpinner(kind: CustomStudyKind): string {
 /** setTextAfterSpinner in customstudy.py. */
 export function textAfterSpinner(kind: CustomStudyKind, value: number): string {
     switch (kind) {
-        case "new":
-        case "review":
-            return tr.customStudyCards({ count: value });
         case "forgot":
         case "ahead":
         case "preview":
@@ -114,12 +82,8 @@ export function textAfterSpinner(kind: CustomStudyKind, value: number): string {
 }
 
 /** The spinner's range and starting value for an option (onRadioChange). */
-export function spinnerFor(kind: CustomStudyKind, defaults: CustomStudyDefaultsResponse): SpinnerSpec {
+export function spinnerFor(kind: CustomStudyKind): SpinnerSpec {
     switch (kind) {
-        case "new":
-            return { min: -DYN_MAX_SIZE, max: DYN_MAX_SIZE, value: defaults.extendNew };
-        case "review":
-            return { min: -DYN_MAX_SIZE, max: DYN_MAX_SIZE, value: defaults.extendReview };
         case "forgot":
             return { min: 1, max: 30, value: 1 };
         case "ahead":
@@ -168,10 +132,6 @@ export function customStudyRequest(
     cram: CramSelection = { type: "new", include: [], exclude: [] },
 ): PlainMessage<CustomStudyRequest> {
     switch (kind) {
-        case "new":
-            return { deckId, value: { case: "newLimitDelta", value } };
-        case "review":
-            return { deckId, value: { case: "reviewLimitDelta", value } };
         case "forgot":
             return { deckId, value: { case: "forgotDays", value } };
         case "ahead":

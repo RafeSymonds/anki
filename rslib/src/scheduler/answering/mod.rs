@@ -694,7 +694,6 @@ fn get_fuzz_factor(seed: Option<u64>) -> Option<f32> {
 pub(crate) mod test {
     use super::*;
     use crate::card::CardType;
-    use crate::deckconfig::ReviewMix;
     use crate::search::SortMode;
 
     fn current_state(col: &mut Collection, card_id: CardId) -> CardState {
@@ -858,53 +857,6 @@ pub(crate) mod test {
         }
         let cids = col.search_cards("", SortMode::NoOrder)?;
         Ok((col, cids))
-    }
-
-    macro_rules! assert_counts {
-        ($col:ident, $new:expr, $learn:expr, $review:expr) => {{
-            let tree = $col.deck_tree(Some(TimestampSecs::now())).unwrap();
-            assert_eq!(tree.new_count, $new);
-            assert_eq!(tree.learn_count, $learn);
-            assert_eq!(tree.review_count, $review);
-            let queued = $col.get_queued_cards(1, false).unwrap();
-            assert_eq!(queued.new_count, $new);
-            assert_eq!(queued.learning_count, $learn);
-            assert_eq!(queued.review_count, $review);
-        }};
-    }
-
-    #[test]
-    fn new_limited_by_reviews() -> Result<()> {
-        let (mut col, cids) = v3_test_collection(4)?;
-        // The final answer schedules a learning card a 10-minute step ahead. Run
-        // shortly before the daily cutoff (e.g. 3:50-4:00 GMT with the default 4am
-        // rollover), that step crosses into the next day and the card is no longer
-        // counted as intraday learning, so the expected counts break. Skip in that
-        // window, as the sibling timing-sensitive tests do.
-        if col.timing_today()?.near_cutoff() {
-            return Ok(());
-        }
-        col.set_due_date(&cids[0..2], "0", None)?;
-        // set a limit of 3 reviews, which should give us 2 reviews and 1 new card
-        let mut conf = col.get_deck_config(DeckConfigId(1), false)?.unwrap();
-        conf.inner.reviews_per_day = 3;
-        conf.inner.set_new_mix(ReviewMix::BeforeReviews);
-        col.storage.update_deck_conf(&conf)?;
-
-        assert_counts!(col, 1, 0, 2);
-        // first card is the new card
-        col.answer_good();
-        assert_counts!(col, 0, 1, 2);
-        // then the two reviews
-        col.answer_good();
-        assert_counts!(col, 0, 1, 1);
-        col.answer_good();
-        assert_counts!(col, 0, 1, 0);
-        // after the final 10 minute step, the queues should be empty
-        col.answer_good();
-        assert_counts!(col, 0, 0, 0);
-
-        Ok(())
     }
 
     #[test]
