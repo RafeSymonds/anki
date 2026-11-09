@@ -52,7 +52,7 @@ env:
 jobs:
   build:
     # An arm64 runner; the bundle is a universal binary, so it covers Intel too.
-    runs-on: macos-14
+    runs-on: macos-latest
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 #v4
